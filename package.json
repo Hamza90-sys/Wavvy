@@ -1,0 +1,20 @@
+{
+  "name": "wavvy",
+  "private": true,
+  "scripts": {
+    "predev": "node scripts/validate-workspace-json.cjs",
+    "prestart:frontend": "node scripts/validate-workspace-json.cjs",
+    "prestart:backend": "node scripts/validate-workspace-json.cjs",
+    "start:frontend": "cd frontend && npm start",
+    "start:backend": "cd backend && npm run dev",
+    "dev": "node scripts/dev-watch.cjs",
+    "dev:bg": "powershell -ExecutionPolicy Bypass -File scripts/dev-watch-win.ps1",
+    "dev:attached": "concurrently --kill-others --names backend,frontend \"npm run start:backend\" \"npm run start:frontend\"",
+    "dev:up": "start \"wavvy-backend\" cmd /k \"cd /d backend && npm run dev\" && start \"wavvy-frontend\" cmd /k \"cd /d frontend && npm start\"",
+    "dev:ensure": "node scripts/ensure-dev.cjs",
+    "doctor": "node scripts/dev-doctor.cjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
