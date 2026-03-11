@@ -18,6 +18,14 @@ const toAttachmentUrl = (url) => {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return `${API_BASE}${url}`;
 };
+const getDirectNickname = (currentUserId, otherUserId) => {
+  if (!currentUserId || !otherUserId) return "";
+  try {
+    return localStorage.getItem(`wavvy_dm_nickname:${currentUserId}:${otherUserId}`) || "";
+  } catch (_error) {
+    return "";
+  }
+};
 
 const isImage = (mimeType = "") => mimeType.startsWith("image/");
 const isAudio = (mimeType = "") => mimeType.startsWith("audio/");
@@ -58,6 +66,7 @@ export default function ChatInterface({
   const [draftInjection, setDraftInjection] = useState(null);
   const [activeAudioId, setActiveAudioId] = useState("");
   const [audioUiById, setAudioUiById] = useState({});
+  const [nicknameTick, setNicknameTick] = useState(0);
   const messageListRef = useRef(null);
   const prevMessageCountRef = useRef(0);
   const audioRefs = useRef({});
@@ -90,6 +99,12 @@ export default function ChatInterface({
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setNicknameTick((tick) => tick + 1);
+    window.addEventListener("wavvy:nickname-change", handler);
+    return () => window.removeEventListener("wavvy:nickname-change", handler);
   }, []);
 
   const canDeleteMessage = useMemo(
@@ -218,6 +233,21 @@ export default function ChatInterface({
     audio.currentTime = nextTime;
   };
 
+  const isDirectChat = Boolean(activeRoom?.isPrivate) && (activeRoom.members?.length === 2 || roomUsers.length === 2);
+  const otherMember = isDirectChat
+    ? roomUsers.find((member) => (member.id || member._id) !== currentUser?.id)
+    : null;
+  const storedNickname = useMemo(() => {
+    if (!isDirectChat) return "";
+    return getDirectNickname(currentUser?.id, otherMember?.id || otherMember?._id);
+  }, [isDirectChat, currentUser?.id, otherMember?.id, otherMember?._id, nicknameTick]);
+  const displayName = isDirectChat
+    ? (storedNickname || otherMember?.displayName || otherMember?.username || "Direct chat")
+    : (activeRoom?.name || "");
+  const initials = displayName?.slice(0, 2).toUpperCase() || "RM";
+  const memberCount = activeRoom?.members?.length || roomUsers.length || 0;
+  const roomAvatarUrl = toAttachmentUrl(isDirectChat ? otherMember?.avatarUrl : activeRoom?.avatarUrl);
+
   if (!activeRoom) {
     return (
       <section className="chat-interface glass empty-chat">
@@ -226,10 +256,6 @@ export default function ChatInterface({
       </section>
     );
   }
-
-  const initials = activeRoom.name?.slice(0, 2).toUpperCase() || "RM";
-  const memberCount = activeRoom.members?.length || 0;
-  const roomAvatarUrl = toAttachmentUrl(activeRoom.avatarUrl);
 
   const handleLaunchCall = (type) => {
     if (!activeRoom) return;
@@ -240,13 +266,20 @@ export default function ChatInterface({
     window.open(url.toString(), "_blank", "noopener");
   };
 
+  const openDirectProfile = () => {
+    if (!isDirectChat || !otherMember) return;
+    const memberId = otherMember.id || otherMember._id;
+    if (!memberId) return;
+    window.location.href = `/user/${memberId}`;
+  };
+
   return (
     <section className="chat-interface glass">
       <header className="chat-head">
         <div className="chat-title-wrap">
-          {roomAvatarUrl ? <img src={roomAvatarUrl} alt={activeRoom.name} className="chat-avatar chat-avatar-image" /> : <div className="chat-avatar">{initials}</div>}
+          {roomAvatarUrl ? <img src={roomAvatarUrl} alt={displayName} className="chat-avatar chat-avatar-image" /> : <div className="chat-avatar">{initials}</div>}
           <div>
-            <h3>{activeRoom.name}</h3>
+            <h3>{displayName}</h3>
             <p>{activeRoom.description || "chat"}</p>
             {roomTypeLabel(activeRoom.roomType) ? <p className="chat-room-type">{roomTypeLabel(activeRoom.roomType)}</p> : null}
           </div>
@@ -284,8 +317,19 @@ export default function ChatInterface({
               <polygon points="17 10 22 7 22 17 17 14 17 10" />
             </svg>
           </button>
-          <button type="button" className="ghost-btn head-link-btn" onClick={() => onLeaveRoom(activeRoom._id)}>Leave</button>
-          <button type="button" className="ghost-btn dots-btn" aria-label="More options" onClick={onOpenRoomSettings}>...</button>
+          {!isDirectChat ? (
+            <button type="button" className="ghost-btn head-link-btn" onClick={() => onLeaveRoom(activeRoom._id)}>Leave</button>
+          ) : null}
+          {!isDirectChat ? (
+            <button
+              type="button"
+              className="ghost-btn dots-btn"
+              aria-label="More options"
+              onClick={onOpenRoomSettings}
+            >
+              ...
+            </button>
+          ) : null}
         </div>
       </header>
 

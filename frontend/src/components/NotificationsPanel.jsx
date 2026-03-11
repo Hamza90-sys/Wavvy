@@ -24,26 +24,29 @@ const formatRelativeTime = (value) => {
 };
 
 const canAct = (item) =>
-  !item.isRead && (item.type === "FOLLOW_REQUEST" || item.type === "JOIN_ROOM_REQUEST");
+  item.type === "FOLLOW_REQUEST" || item.type === "JOIN_ROOM_REQUEST";
 
 export default function NotificationsPanel({
   notifications = [],
   loading = false,
   onAccept = () => {},
-  onDecline = () => {}
+  onDecline = () => {},
+  onStartChat = () => {}
 }) {
   return (
-    <section className="notifications-panel glass" aria-label="Notifications">
+    <section className="notifications-panel glass inline" aria-label="Notifications">
       <header className="notifications-head">
         <h3>Notifications</h3>
       </header>
-      <div className="notifications-list">
+      <div className="notifications-list compact">
         {loading ? <p className="muted">Loading notifications...</p> : null}
         {!loading && notifications.length === 0 ? <p className="muted">No notifications yet.</p> : null}
         {!loading
           ? notifications.map((item) => {
               const senderName = item.sender?.displayName || item.sender?.username || "User";
               const avatarUrl = toAttachmentUrl(item.sender?.avatarUrl || "");
+              const canStartChat = (item.type === "NEW_FOLLOWER" || item.type === "FOLLOW_ACCEPTED") && (item.sender?.id || item.senderId);
+              const targetUserId = item.sender?.id || item.senderId || "";
               return (
                 <article
                   key={item.id}
@@ -61,12 +64,19 @@ export default function NotificationsPanel({
                     <p>{item.message}</p>
                     <small>{formatRelativeTime(item.createdAt)}</small>
                     {canAct(item) ? (
-                      <div className="notification-actions">
+                      <div className="notification-actions compact">
                         <button type="button" className="primary-btn" onClick={() => onAccept(item.id)}>
                           Accept
                         </button>
                         <button type="button" className="ghost-btn" onClick={() => onDecline(item.id)}>
                           Decline
+                        </button>
+                      </div>
+                    ) : null}
+                    {canStartChat ? (
+                      <div className="notification-actions compact">
+                        <button type="button" className="primary-btn" onClick={() => onStartChat(targetUserId)}>
+                          Start chatting
                         </button>
                       </div>
                     ) : null}

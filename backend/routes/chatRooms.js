@@ -73,6 +73,52 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.post("/direct/:userId", async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    if (!targetUserId || targetUserId === req.user.id) {
+      return res.status(400).json({ message: "Invalid user" });
+    }
+
+    const targetUser = await User.findById(targetUserId).select("_id username");
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const existing = await ChatRoom.findOne({
+      $and: [
+        { members: { $all: [req.user.id, targetUserId] } },
+        { members: { $size: 2 } },
+        { isPrivate: true },
+        { roomType: "normal" }
+      ]
+    })
+      .populate("createdBy admins members", "username displayName avatarUrl avatarColor status preferences.visibility");
+
+    if (existing) {
+      return res.json({ room: scrubRoom(existing, req.user.id) });
+    }
+
+    const suffix = Date.now().toString(36).slice(-4);
+    const safeName = `dm-${req.user.id.slice(-6)}-${targetUserId.slice(-6)}-${suffix}`;
+
+    const room = await ChatRoom.create({
+      name: safeName,
+      description: "Direct chat",
+      isPrivate: true,
+      roomType: "normal",
+      createdBy: req.user.id,
+      admins: [req.user.id],
+      members: [req.user.id, targetUserId]
+    });
+
+    const populated = await room.populate("createdBy admins members", "username displayName avatarUrl avatarColor status preferences.visibility");
+    return res.status(201).json({ room: scrubRoom(populated, req.user.id) });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to create direct chat", error: error.message });
+  }
+});
+
 router.post("/", async (req, res) => {
   try {
     const { name, description, isPrivate, roomType } = req.body;
@@ -316,7 +362,7 @@ router.get("/:roomId/media", async (req, res) => {
       return res.status(403).json({ message: "Only room members can view media" });
     }
 
-    const messages = await Message.find({ room: room._id, "attachments.mimeType": { $regex: /^image\// } })
+    const messages = await Message.find({ room: room._id, "attachments.mimeType": { $regex: /^(image|video)\// } })
       .select("attachments createdAt user")
       .sort({ createdAt: -1 })
       .limit(500)
@@ -325,7 +371,7 @@ router.get("/:roomId/media", async (req, res) => {
     const images = [];
     messages.forEach((message) => {
       (message.attachments || []).forEach((attachment) => {
-        if (attachment.mimeType?.startsWith("image/")) {
+        if (attachment.mimeType?.startsWith("image/") || attachment.mimeType?.startsWith("video/")) {
           images.push({
             url: attachment.url,
             fileName: attachment.fileName,

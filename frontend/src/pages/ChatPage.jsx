@@ -321,6 +321,15 @@ export default function ChatPage() {
     await loadBlockedUsers();
   };
 
+  const handleBlockUser = useCallback(
+    async (userId) => {
+      if (!userId) return;
+      await api.post(`/users/blocked/${userId}`);
+      await loadBlockedUsers();
+    },
+    [api, loadBlockedUsers]
+  );
+
   const handleVisibilityChange = async (value) => {
     await updateSettings({ visibility: value });
   };
@@ -494,14 +503,19 @@ export default function ChatPage() {
   const handleAcceptNotification = useCallback(
     async (notificationId) => {
       const { data } = await api.post(`/notifications/${notificationId}/accept`);
-      setNotifications((prev) =>
-        prev.map((item) => (item.id === notificationId ? { ...item, ...(data.notification || {}), isRead: true } : item))
-      );
+      const acceptedType = data.notification?.type;
+      if (acceptedType === "FOLLOW_REQUEST") {
+        setNotifications((prev) => prev.filter((item) => item.id !== notificationId));
+      } else {
+        setNotifications((prev) =>
+          prev.map((item) => (item.id === notificationId ? { ...item, ...(data.notification || {}), isRead: true } : item))
+        );
+      }
       setUnreadNotifications((prev) => Math.max(0, prev - 1));
-      if (data.notification?.type === "JOIN_ROOM_REQUEST") {
+      if (acceptedType === "JOIN_ROOM_REQUEST") {
         await loadRooms();
       }
-      if (data.notification?.type === "FOLLOW_REQUEST") {
+      if (acceptedType === "FOLLOW_REQUEST") {
         await loadConnections();
       }
     },
@@ -835,6 +849,19 @@ export default function ChatPage() {
     setUnreadByRoom((prev) => ({ ...prev, [room._id]: 0 }));
     socket?.emit("joinRoom", { roomId: room._id });
   };
+
+  const startChatWithUser = useCallback(
+    async (userId) => {
+      if (!userId) return;
+      const { data } = await api.post(`/chatrooms/direct/${userId}`);
+      const room = data.room;
+      if (!room) return;
+      setRooms((prev) => (prev.some((entry) => entry._id === room._id) ? prev : [room, ...prev]));
+      await selectRoom(room);
+      setActivePane("chat");
+    },
+    [api, selectRoom]
+  );
 
   const openRoomFromDiscover = async (roomId) => {
     const room = rooms.find((entry) => entry._id === roomId);
@@ -1206,6 +1233,7 @@ export default function ChatPage() {
         onNotificationsOpen={openNotifications}
         onAcceptNotification={handleAcceptNotification}
         onDeclineNotification={handleDeclineNotification}
+        onStartChatNotification={startChatWithUser}
         activePane={activePane}
         onPaneChange={setActivePane}
       />
@@ -1293,7 +1321,17 @@ export default function ChatPage() {
             localVideoRef={localVideoRef}
             remoteVideoRef={remoteVideoRef}
           />
-          <RoomDetailsPanel activeRoom={activeRoom} roomUsers={roomUsers} currentUser={user} onKickMember={kickMember} />
+          <RoomDetailsPanel
+            activeRoom={activeRoom}
+            roomUsers={roomUsers}
+            currentUser={user}
+            onKickMember={kickMember}
+            mediaItems={roomMedia}
+            loadingMedia={loadingRoomMedia}
+            onLoadMedia={loadRoomMedia}
+            blockedUsers={blockedUsers}
+            onBlockUser={handleBlockUser}
+          />
         </>
       )}
       <CreateRoomModal open={createOpen} onClose={() => setCreateOpen(false)} onCreate={createRoom} />

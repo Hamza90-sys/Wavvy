@@ -11,6 +11,18 @@ const toAttachmentUrl = (url) => {
   return `${API_BASE}${url}`;
 };
 const roomTypeLabel = (roomType) => (roomType === "voice" ? "Voice chat" : "");
+const getDirectNickname = (currentUserId, otherUserId) => {
+  if (!currentUserId || !otherUserId) return "";
+  try {
+    return localStorage.getItem(`wavvy_dm_nickname:${currentUserId}:${otherUserId}`) || "";
+  } catch (_error) {
+    return "";
+  }
+};
+const applyThemePreview = (themeId) => {
+  if (!themeId) return;
+  document.body.dataset.theme = themeId;
+};
 
 function Icon({ path, size = 20 }) {
   return (
@@ -36,18 +48,21 @@ export default function Sidebar({
   onNotificationsOpen = () => {},
   onAcceptNotification = () => {},
   onDeclineNotification = () => {},
+  onStartChatNotification = () => {},
   activePane = "chat",
   onPaneChange = () => {}
 }) {
   const [query, setQuery] = useState("");
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [nicknameTick, setNicknameTick] = useState(0);
   const themeMenuRef = useRef(null);
+  const themePanelRef = useRef(null);
   const notificationsRef = useRef(null);
 
   const filteredRooms = useMemo(
     () => rooms.filter((room) => `${room.name} ${room.description || ""}`.toLowerCase().includes(query.toLowerCase())),
-    [rooms, query]
+    [rooms, query, nicknameTick]
   );
 
   const activeTheme = THEMES.find((item) => item.id === theme);
@@ -55,13 +70,21 @@ export default function Sidebar({
   useEffect(() => {
     if (!themeMenuOpen) return undefined;
     const onPointerDown = (event) => {
-      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target)) {
+      const hitMenu = themeMenuRef.current?.contains(event.target);
+      const hitPanel = themePanelRef.current?.contains(event.target);
+      if (!hitMenu && !hitPanel) {
         setThemeMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [themeMenuOpen]);
+
+  useEffect(() => {
+    if (!themeMenuOpen) {
+      applyThemePreview(theme);
+    }
+  }, [themeMenuOpen, theme]);
 
   useEffect(() => {
     if (!notificationsOpen) return undefined;
@@ -73,6 +96,12 @@ export default function Sidebar({
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [notificationsOpen]);
+
+  useEffect(() => {
+    const handler = () => setNicknameTick((tick) => tick + 1);
+    window.addEventListener("wavvy:nickname-change", handler);
+    return () => window.removeEventListener("wavvy:nickname-change", handler);
+  }, []);
 
   return (
     <aside className="sidebar">
@@ -95,7 +124,7 @@ export default function Sidebar({
         </button>
         <button type="button" className="rail-btn" aria-label="Video"><Icon path="M15 10l5-3v10l-5-3zM4 6h11v12H4z" /></button>
         <button type="button" className="rail-btn" aria-label="Calls"><Icon path="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.7 2.6a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.4a2 2 0 0 1 2.1-.4c.8.4 1.7.6 2.6.7A2 2 0 0 1 22 16.9z" /></button>
-        <div className="notifications-anchor" ref={notificationsRef}>
+        <div className="notifications-anchor">
           <button
             type="button"
             className={`rail-btn ${notificationsOpen ? "active" : ""}`}
@@ -113,14 +142,6 @@ export default function Sidebar({
               <span className="rail-badge">{Math.min(unreadNotifications, 99)}</span>
             ) : null}
           </button>
-          {notificationsOpen ? (
-            <NotificationsPanel
-              notifications={notifications}
-              loading={notificationsLoading}
-              onAccept={onAcceptNotification}
-              onDecline={onDeclineNotification}
-            />
-          ) : null}
         </div>
         <div className="rail-spacer" />
         <button
@@ -144,30 +165,12 @@ export default function Sidebar({
           >
             <Icon path="M12 3a9 9 0 1 0 9 9c0-.5-.4-.8-.8-.7A7 7 0 0 1 12.7 3.8c.1-.4-.2-.8-.7-.8z" />
           </button>
-          {themeMenuOpen ? (
-            <div className="theme-menu glass" role="menu" aria-label="Choose theme">
-              {THEMES.map((themeOption) => (
-                <button
-                  key={themeOption.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={themeOption.id === theme}
-                  className={`theme-menu-item ${themeOption.id === theme ? "active" : ""}`}
-                  onClick={() => {
-                    onThemeChange(themeOption.id);
-                    setThemeMenuOpen(false);
-                  }}
-                >
-                  {themeOption.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {themeMenuOpen ? null : null}
         </div>
         <button type="button" className="rail-btn" onClick={onLogout} aria-label="Logout"><Icon path="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></button>
       </div>
 
-      <div className="sidebar-main glass">
+      <div className={`sidebar-main glass${themeMenuOpen ? " theme-open" : ""}`}>
         <div className="sidebar-head">
           <h2>Chat</h2>
           <button className="add-room-btn" onClick={onCreateRoomOpen} type="button">+</button>
@@ -183,34 +186,87 @@ export default function Sidebar({
           <input type="text" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search contact" aria-label="Search rooms" />
         </label>
 
-        <div className="room-list">
+        {themeMenuOpen ? (
+          <div className="theme-panel-inline theme-panel glass" role="menu" aria-label="Choose theme" ref={themePanelRef}>
+            {THEMES.map((themeOption) => (
+              <button
+                key={themeOption.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={themeOption.id === theme}
+                data-theme={themeOption.id}
+                className={`theme-card ${themeOption.id === theme ? "active" : ""}`}
+                onMouseEnter={() => applyThemePreview(themeOption.id)}
+                onMouseLeave={() => applyThemePreview(theme)}
+                onFocus={() => applyThemePreview(themeOption.id)}
+                onBlur={() => applyThemePreview(theme)}
+                onClick={() => {
+                  applyThemePreview(themeOption.id);
+                  onThemeChange(themeOption.id);
+                  setThemeMenuOpen(false);
+                }}
+              >
+                <div className="theme-preview" aria-hidden="true">
+                  <div className="theme-preview-top" />
+                  <div className="theme-preview-bubbles">
+                    <div className="theme-bubble left">Hey Hamza</div>
+                    <div className="theme-bubble right">What's up?</div>
+                  </div>
+                </div>
+                <span className="theme-card-label">{themeOption.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : notificationsOpen ? (
+          <div className="notifications-inline full" ref={notificationsRef}>
+            <NotificationsPanel
+              notifications={notifications}
+              loading={notificationsLoading}
+              onAccept={onAcceptNotification}
+              onDecline={onDeclineNotification}
+              onStartChat={onStartChatNotification}
+            />
+          </div>
+        ) : (
+          <div className="room-list">
           {filteredRooms.map((room) => {
             const isMember = room.members?.some((member) => (member._id || member.id) === user?.id);
             const isActive = activeRoom?._id === room._id;
-            const initials = room.name?.slice(0, 2).toUpperCase() || "RM";
-            const roomAvatarUrl = toAttachmentUrl(room.avatarUrl);
+            const isDirectChat = Boolean(room.isPrivate) && (room.members?.length === 2);
+            const otherMember = isDirectChat
+              ? room.members?.find((member) => (member._id || member.id) !== user?.id)
+              : null;
+            const storedNickname = isDirectChat ? getDirectNickname(user?.id, otherMember?.id || otherMember?._id) : "";
+            const displayName = isDirectChat
+              ? (storedNickname || otherMember?.displayName || otherMember?.username || "Direct chat")
+              : room.name;
+            const initials = displayName?.slice(0, 2).toUpperCase() || "RM";
+            const roomAvatarUrl = toAttachmentUrl(isDirectChat ? otherMember?.avatarUrl : room.avatarUrl);
             return (
               <article key={room._id} className={isActive ? "room-card active" : "room-card"}>
                 <button type="button" onClick={() => (isMember ? onSelectRoom(room) : onJoinRoom(room._id))} className="room-main-btn">
                   {roomAvatarUrl ? <img src={roomAvatarUrl} alt={room.name} className="room-avatar room-avatar-image" /> : <span className="room-avatar">{initials}</span>}
                   <span className="room-text">
-                    <strong>{room.name}</strong>
-                    <span>{room.description || "chat"}</span>
+                    <strong>{displayName}</strong>
+                    <span>{isDirectChat ? "Direct chat" : (room.description || "chat")}</span>
                     {roomTypeLabel(room.roomType) ? <small className="room-type-text">{roomTypeLabel(room.roomType)}</small> : null}
                   </span>
-                  <small className="room-members">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                      <circle cx="8.5" cy="7" r="4" />
-                      <path d="M20 8v6M23 11h-6" />
-                    </svg>
-                    {room.members?.length || 0}
-                  </small>
+                  {!isDirectChat ? (
+                    <small className="room-members">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="8.5" cy="7" r="4" />
+                        <path d="M20 8v6M23 11h-6" />
+                      </svg>
+                      {room.members?.length || 0}
+                    </small>
+                  ) : null}
                 </button>
               </article>
             );
           })}
-        </div>
+          </div>
+        )}
       </div>
     </aside>
   );
