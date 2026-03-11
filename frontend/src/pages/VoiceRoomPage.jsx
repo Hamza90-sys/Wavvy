@@ -5,6 +5,20 @@ import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
+const TURN_URLS = (process.env.REACT_APP_TURN_URLS || "").split(",").map((entry) => entry.trim()).filter(Boolean);
+const TURN_USERNAME = process.env.REACT_APP_TURN_USERNAME || "";
+const TURN_CREDENTIAL = process.env.REACT_APP_TURN_CREDENTIAL || "";
+const getIceServers = () => {
+  const servers = [{ urls: "stun:stun.l.google.com:19302" }];
+  if (TURN_URLS.length) {
+    servers.push({
+      urls: TURN_URLS,
+      username: TURN_USERNAME,
+      credential: TURN_CREDENTIAL
+    });
+  }
+  return servers;
+};
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
 const toAttachmentUrl = (url) => {
@@ -97,7 +111,7 @@ export default function VoiceRoomPage() {
     }
 
     const peerConnection = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      iceServers: getIceServers()
     });
 
     peerConnection.onicecandidate = (event) => {

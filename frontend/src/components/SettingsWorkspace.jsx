@@ -56,6 +56,10 @@ export default function SettingsWorkspace({
   onToggleAnalytics,
   onReport,
   onUnfollow,
+  onFollowBack,
+  onRemoveFollower,
+  onBlockUser,
+  onStartMessage,
   onDiscoverSave,
   onOpenHelp,
   onOpenTerms,
@@ -72,6 +76,8 @@ export default function SettingsWorkspace({
   const [reportDescription, setReportDescription] = useState("");
   const [discoverState, setDiscoverState] = useState({ waves: "", people: "", topics: "" });
   const [connectionsTab, setConnectionsTab] = useState("followers");
+  const [connectionsQuery, setConnectionsQuery] = useState("");
+  const [activeConnectionMenuId, setActiveConnectionMenuId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [cropModalOpen, setCropModalOpen] = useState(false);
@@ -144,6 +150,28 @@ export default function SettingsWorkspace({
     () => (connectionsTab === "followers" ? followers : following),
     [connectionsTab, followers, following]
   );
+  const followingIds = useMemo(
+    () => new Set((following || []).map((connection) => connection.id || connection._id).filter(Boolean)),
+    [following]
+  );
+  const filteredConnections = useMemo(() => {
+    const query = connectionsQuery.trim().toLowerCase();
+    if (!query) return connectionsList;
+    return connectionsList.filter((connection) => {
+      const label = `${connection.displayName || ""} ${connection.username || ""}`.toLowerCase();
+      return label.includes(query);
+    });
+  }, [connectionsList, connectionsQuery]);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (!event.target.closest(".connections-menu")) {
+        setActiveConnectionMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
 
   if (view === "index") {
     return (
@@ -402,17 +430,154 @@ export default function SettingsWorkspace({
   if (view === "connections") {
     return (
       <DetailShell title="Connections" subtitle="Followers and people you follow." onBack={() => setView("index")}>
-        <div className="settings-segment">
-          <button type="button" className={connectionsTab === "followers" ? "primary-btn" : "ghost-btn"} onClick={() => setConnectionsTab("followers")}>Followers</button>
-          <button type="button" className={connectionsTab === "following" ? "primary-btn" : "ghost-btn"} onClick={() => setConnectionsTab("following")}>Following</button>
-        </div>
-        <div className="settings-list-block">
-          {connectionsList.length ? connectionsList.map((connection) => (
-            <div key={connection.id || connection._id} className="settings-item static">
-              <span className="settings-text"><strong>{connection.displayName || connection.username}</strong></span>
-              {connectionsTab === "following" ? <button type="button" className="ghost-btn" onClick={() => onUnfollow(connection.id || connection._id)}>Unfollow</button> : null}
+        <div className="connections-panel">
+          <div className="connections-toolbar compact">
+            <div className="connections-tabs">
+              <button
+                type="button"
+                className={connectionsTab === "followers" ? "connections-tab active" : "connections-tab"}
+                onClick={() => setConnectionsTab("followers")}
+              >
+                Followers ({followers?.length || 0})
+              </button>
+              <button
+                type="button"
+                className={connectionsTab === "following" ? "connections-tab active" : "connections-tab"}
+                onClick={() => setConnectionsTab("following")}
+              >
+                Following ({following?.length || 0})
+              </button>
             </div>
-          )) : <p className="muted">No users in this list.</p>}
+          </div>
+          <label className="connections-search compact">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              type="text"
+              value={connectionsQuery}
+              onChange={(event) => setConnectionsQuery(event.target.value)}
+              placeholder={`Search ${connectionsTab}`}
+              aria-label="Search connections"
+            />
+          </label>
+        </div>
+        <div className="connections-list">
+          {filteredConnections.length ? filteredConnections.map((connection) => {
+            const connectionId = connection.id || connection._id;
+            const avatarUrl = toAttachmentUrl(connection.avatarUrl);
+            const displayName = connection.displayName || connection.username || "User";
+            const statusTextValue = connection.status?.text || connection.statusText || "";
+            const isFollowingBack = connectionId && followingIds.has(connectionId);
+            return (
+              <div key={connectionId || displayName} className="connections-item">
+                <div className="connections-left">
+                  <div className="connections-avatar">
+                    {avatarUrl ? <img src={avatarUrl} alt={displayName} /> : <span>{displayName.slice(0, 2).toUpperCase()}</span>}
+                  </div>
+                  <div className="connections-meta">
+                    <strong>{displayName}</strong>
+                    {statusTextValue ? <small>{statusTextValue}</small> : null}
+                  </div>
+                </div>
+                <div className="connections-actions">
+                  {connectionsTab === "followers" ? (
+                    isFollowingBack ? (
+                      <button type="button" className="ghost-btn" disabled>Following</button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        onClick={() => {
+                          if (onFollowBack && connectionId) onFollowBack(connectionId);
+                        }}
+                      >
+                        Follow Back
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => {
+                        if (connectionId) onUnfollow?.(connectionId);
+                      }}
+                    >
+                      Following ✓
+                    </button>
+                  )}
+                  <div className="connections-menu">
+                    <button
+                      type="button"
+                      className="connections-menu-btn"
+                      aria-label="More actions"
+                      onClick={() => setActiveConnectionMenuId((prev) => (prev === connectionId ? null : connectionId))}
+                    >
+                      <span aria-hidden="true">⋯</span>
+                    </button>
+                    {activeConnectionMenuId === connectionId ? (
+                      <div className="connections-menu-panel" role="menu">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (connectionId) window.location.href = `/user/${connectionId}`;
+                            setActiveConnectionMenuId(null);
+                          }}
+                        >
+                          View Profile
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onStartMessage && connectionId) onStartMessage(connectionId);
+                            setActiveConnectionMenuId(null);
+                          }}
+                        >
+                          Send Message
+                        </button>
+                        {connectionsTab === "followers" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onRemoveFollower && connectionId) onRemoveFollower(connectionId);
+                              setActiveConnectionMenuId(null);
+                            }}
+                          >
+                            Remove Follower
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (connectionId) onUnfollow?.(connectionId);
+                              setActiveConnectionMenuId(null);
+                            }}
+                          >
+                            Unfollow
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => {
+                            if (onBlockUser && connectionId) onBlockUser(connectionId);
+                            setActiveConnectionMenuId(null);
+                          }}
+                        >
+                          Block User
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          }) : (
+            <p className="muted">
+              {connectionsTab === "followers" ? "No one is following you yet." : "You are not following anyone yet."}
+            </p>
+          )}
         </div>
       </DetailShell>
     );
@@ -459,9 +624,19 @@ export default function SettingsWorkspace({
     return (
       <DetailShell title="Terms & Privacy" subtitle="Legal documents and privacy information." onBack={() => setView("index")}>
         <div className="settings-inline-card">
-          <strong>Review the latest terms</strong>
-          <p className="muted">Open the terms and privacy page in a new tab.</p>
-          <button type="button" className="primary-btn" onClick={onOpenTerms}>Open Terms & Privacy</button>
+          <strong>By using Wavvy, you agree to use the platform responsibly and respectfully.</strong>
+          <p className="muted">User Responsibility</p>
+          <ul className="settings-list-block">
+            <li>Users must not send harmful or abusive content.</li>
+            <li>Users must not spam other users.</li>
+            <li>Users must not share illegal material.</li>
+          </ul>
+          <p className="muted">Privacy</p>
+          <p>Wavvy respects your privacy. Your messages and personal information are handled securely and are not shared with third parties without your consent.</p>
+          <p className="muted">Data Usage</p>
+          <p>Wavvy may store basic account information such as username, profile picture, and messages to provide the service.</p>
+          <p className="muted">Updates</p>
+          <p>These terms may be updated in the future to improve the service. If you have any questions, please contact us.</p>
         </div>
       </DetailShell>
     );
@@ -470,8 +645,19 @@ export default function SettingsWorkspace({
   return (
     <DetailShell title="About Wavvy" subtitle="App information and version details." onBack={() => setView("index")}>
       <div className="settings-inline-card">
-        <strong>{aboutInfo?.name || "Wavvy"}</strong>
+        <strong>{aboutInfo?.name === "wavvy-chat-backend" ? "Wavvy chat" : (aboutInfo?.name || "Wavvy")}</strong>
+        <p>Wavvy is a modern messaging platform designed to make communication simple, fast, and beautiful.</p>
+        <p className="muted">Our goal is to provide users with a clean and enjoyable chat experience while keeping conversations private and secure.</p>
+        <p>With Wavvy, users can:</p>
+        <ul className="settings-list-block">
+          <li>Send messages instantly.</li>
+          <li>Share photos and media.</li>
+          <li>Customize their chat experience with themes.</li>
+          <li>Connect with friends in a smooth and modern interface.</li>
+        </ul>
+        <p>Wavvy focuses on simplicity, speed, and design to create a messaging experience that feels natural and enjoyable.</p>
         <p className="muted">Version {aboutInfo?.version || "1.0.0"}</p>
+        <p className="muted">Built with love by Hamza Chargui</p>
       </div>
     </DetailShell>
   );

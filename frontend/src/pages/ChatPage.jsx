@@ -17,6 +17,20 @@ import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
+const TURN_URLS = (process.env.REACT_APP_TURN_URLS || "").split(",").map((entry) => entry.trim()).filter(Boolean);
+const TURN_USERNAME = process.env.REACT_APP_TURN_USERNAME || "";
+const TURN_CREDENTIAL = process.env.REACT_APP_TURN_CREDENTIAL || "";
+const getIceServers = () => {
+  const servers = [{ urls: "stun:stun.l.google.com:19302" }];
+  if (TURN_URLS.length) {
+    servers.push({
+      urls: TURN_URLS,
+      username: TURN_USERNAME,
+      credential: TURN_CREDENTIAL
+    });
+  }
+  return servers;
+};
 const defaultPreferences = {
   notifications: { mentions: true, invites: true, waveAlerts: false },
   device: { sounds: true, haptics: true },
@@ -386,7 +400,7 @@ export default function ChatPage() {
       }
 
       const peerConnection = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        iceServers: getIceServers()
       });
 
       peerConnection.onicecandidate = (event) => {
@@ -839,11 +853,16 @@ export default function ChatPage() {
   }, [socket, activeRoom, cleanupCall, ensurePeerConnection, startLocalMedia, attachLocalTracksToPeerConnection, mapRoomUsers, user, setUser, loadRooms, loadConnections]);
 
   const selectRoom = async (room) => {
-    const isMember = room.members?.some((member) => (member._id || member.id) === user?.id);
+    const hasMembers = Array.isArray(room.members);
+    const isMember = hasMembers
+      ? room.members?.some((member) => (member._id || member.id) === user?.id)
+      : (room.isMember ?? true);
     if (!isMember) return;
     setActiveRoom(room);
+    setActivePane("chat");
     setTypingUsers([]);
-    await loadMessages(room._id);
+    setMessages([]);
+    loadMessages(room._id);
     setRoomUsers(mapRoomUsers(room.members || []));
     setRoomMedia([]);
     setUnreadByRoom((prev) => ({ ...prev, [room._id]: 0 }));
@@ -1247,6 +1266,7 @@ export default function ChatPage() {
             pendingFollowIds={pendingFollowIds}
             onBack={() => setDiscoverSelection(null)}
             onFollowUser={handleFollowUser}
+            onStartChatUser={startChatWithUser}
             onOpenRoomChat={openRoomFromDiscover}
             onJoinRoom={joinRoom}
           />
@@ -1257,6 +1277,7 @@ export default function ChatPage() {
             following={following}
             pendingFollowIds={pendingFollowIds}
             onFollowUser={handleFollowUser}
+            onStartChatUser={startChatWithUser}
             onOpenUser={(id) => setDiscoverSelection({ type: "user", id })}
             onOpenRoom={(id) => setDiscoverSelection({ type: "room", id })}
             filters={userSettings.discoverFilters}

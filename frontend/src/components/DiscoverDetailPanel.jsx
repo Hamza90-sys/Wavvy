@@ -29,6 +29,7 @@ export default function DiscoverDetailPanel({
   pendingFollowIds = {},
   onBack = () => {},
   onFollowUser = async () => {},
+  onStartChatUser = async () => {},
   onOpenRoomChat = async () => {},
   onJoinRoom = async () => {}
 }) {
@@ -116,6 +117,7 @@ export default function DiscoverDetailPanel({
     const isFollowing = relationship.isFollowing || followingIds.has(profile.id);
     const isRequested = relationship.hasPendingFollowRequest || Boolean(pendingFollowIds[profile.id]);
     const canFollow = !relationship.isSelf && !isFollowing && !isRequested;
+    const canChat = !relationship.isSelf && (!profile.isPrivate || isFollowing);
     const showPrivateBanner = profile.isPrivate && !relationship.isSelf;
     const presenceLabel = profile.presenceStatus === "online" ? "Online" : formatLastSeen(profile.lastSeen);
 
@@ -143,7 +145,15 @@ export default function DiscoverDetailPanel({
           </div>
           {!relationship.isSelf ? (
             <div className="profile-actions discover-profile-actions">
-              <button type="button" className="discover-action-btn secondary" onClick={onBack}>
+              <button
+                type="button"
+                className="discover-action-btn secondary"
+                disabled={!canChat}
+                onClick={() => {
+                  if (!canChat) return;
+                  onStartChatUser(profile.id);
+                }}
+              >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

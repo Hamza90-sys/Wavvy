@@ -16,6 +16,7 @@ export default function DiscoverPanel({
   following = [],
   pendingFollowIds = {},
   onFollowUser = () => {},
+  onStartChatUser = () => {},
   onOpenUser = () => {},
   onOpenRoom = () => {},
   filters = { waves: [], people: [], topics: [] }
@@ -35,8 +36,12 @@ export default function DiscoverPanel({
 
     const roomResults = rooms.filter(
       (room) => {
-        const text = `${room.name || ""} ${room.description || ""}`;
-        const matchesQuery = match(room.name || "") || match(room.description || "");
+        if (room?.isPrivate || (room?.name || "").toLowerCase().startsWith("dm-")) {
+          return false;
+        }
+        const name = room.name || "";
+        const text = `${name} ${room.description || ""}`;
+        const matchesQuery = match(name);
         const matchesWaves = matchAny(normalizedFilters.waves, text);
         const matchesTopics = matchAny(normalizedFilters.topics, text);
         return matchesQuery && matchesWaves && matchesTopics;
@@ -79,6 +84,7 @@ export default function DiscoverPanel({
       id: person._id,
       type: "User",
       name: person.username,
+      avatarUrl: toAttachmentUrl(person.avatarUrl),
       avatarColor: person.avatarColor,
       initials: getInitials(person.username),
       person
@@ -157,10 +163,16 @@ export default function DiscoverPanel({
                       <button
                         type="button"
                         className={isFollowing ? "ghost-btn" : "primary-btn"}
-                        disabled={isFollowing || isRequested}
-                        onClick={() => onFollowUser(item.id)}
+                        disabled={isRequested}
+                        onClick={() => {
+                          if (isFollowing) {
+                            onStartChatUser(item.id);
+                            return;
+                          }
+                          onFollowUser(item.id);
+                        }}
                       >
-                        {isFollowing ? "Following" : isRequested ? "Requested" : "Follow"}
+                        {isFollowing ? "Chat" : isRequested ? "Requested" : "Follow"}
                       </button>
                     </article>
                   );
