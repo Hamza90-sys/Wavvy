@@ -455,6 +455,74 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("editMessage", async ({ roomId, messageId, newContent }, ack) => {
+    const done = (payload) => {
+      if (typeof ack === "function") ack(payload);
+    };
+
+    try {
+      if (!roomId || !messageId) {
+        done({ ok: false, message: "Missing room or message id." });
+        return;
+      }
+      
+      const text = (newContent || "").trim();
+      if (!text) {
+        done({ ok: false, message: "Message content cannot be empty." });
+        return;
+      }
+
+      const room = await ChatRoom.findById(roomId).select("_id members");
+      if (!room) {
+        done({ ok: false, message: "Room not found." });
+        return;
+      }
+      const isMember = room.members.some((memberId) => memberId.toString() === socket.user.id);
+      if (!isMember) {
+        done({ ok: false, message: "You are not a member of this room." });
+        return;
+      }
+
+      const message = await Message.findOne({ _id: messageId, room: roomId }).select("_id user");
+      if (!message) {
+        done({ ok: false, message: "Message not found." });
+        return;
+      }
+
+      // Only the author can edit their message
+      const isOwner = message.user?.toString() === socket.user.id;
+      if (!isOwner) {
+        done({ ok: false, message: "You can only edit your own messages." });
+        return;
+      }
+
+      // Update the message in DB
+      await Message.updateOne(
+        { _id: messageId, room: roomId },
+        { $set: { content: text, isEdited: true } }
+      );
+      
+      // Fetch the updated message and populate safely to broadcast
+      const updatedMessage = await Message.findById(messageId).populate([
+        { path: "user", select: "username displayName avatarColor avatarUrl status" },
+        { path: "reactions.users", select: "username" }
+      ]);
+      
+      const serializedMessage = serializeMessage(updatedMessage);
+      serializedMessage.isEdited = true;
+
+      io.to(roomId).emit("messageEdited", {
+        roomId,
+        messageId,
+        message: serializedMessage
+      });
+      
+      done({ ok: true, messageId, message: serializedMessage });
+    } catch (error) {
+      done({ ok: false, message: "Edit failed. Please try again." });
+    }
+  });
+
   socket.on("call:invite", async ({ roomId, targetUserId, callType }) => {
     if (!roomId || !targetUserId || !callType) return;
 

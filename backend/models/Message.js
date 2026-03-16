@@ -39,7 +39,8 @@ const messageSchema = new mongoose.Schema(
     content: { type: String, trim: true, maxlength: 1000, default: "" },
     attachments: [attachmentSchema],
     replyTo: replyToSchema,
-    reactions: [reactionSchema]
+    reactions: [reactionSchema],
+    isEdited: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

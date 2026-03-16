@@ -49,6 +49,7 @@ export default function ChatInterface({
   onTypingStop,
   onToggleReaction,
   onDeleteMessage,
+  onEditMessage,
   onLeaveRoom,
   onOpenRoomSettings,
   onStartAudioCall,
@@ -63,6 +64,7 @@ export default function ChatInterface({
 }) {
   const [activeReactionPickerId, setActiveReactionPickerId] = useState(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
   const [draftInjection, setDraftInjection] = useState(null);
   const [activeAudioId, setActiveAudioId] = useState("");
   const [audioUiById, setAudioUiById] = useState({});
@@ -247,6 +249,49 @@ export default function ChatInterface({
   const initials = displayName?.slice(0, 2).toUpperCase() || "RM";
   const memberCount = activeRoom?.members?.length || roomUsers.length || 0;
   const roomAvatarUrl = toAttachmentUrl(isDirectChat ? otherMember?.avatarUrl : activeRoom?.avatarUrl);
+  const isVoiceRoom = activeRoom?.roomType === "voice";
+
+  const voiceMembers = useMemo(() => {
+    const base = roomUsers?.length
+      ? roomUsers
+      : (activeRoom?.members || []).map((member) => ({
+        id: member._id || member.id,
+        username: member.username,
+        displayName: member.displayName || member.username,
+        avatarColor: member.avatarColor,
+        avatarUrl: member.avatarUrl,
+        presenceStatus: member.presenceStatus || (member.online ? "online" : "offline"),
+        online: Boolean(member.online)
+      }));
+
+    const map = new Map();
+    base.forEach((member) => {
+      if (!member?.id) return;
+      map.set(member.id, member);
+    });
+    if (currentUser?.id && !map.has(currentUser.id)) {
+      map.set(currentUser.id, {
+        id: currentUser.id,
+        username: currentUser.username,
+        displayName: currentUser.displayName || currentUser.username,
+        avatarColor: currentUser.avatarColor,
+        avatarUrl: currentUser.avatarUrl,
+        presenceStatus: "online",
+        online: true
+      });
+    }
+    return Array.from(map.values());
+  }, [roomUsers, activeRoom?.members, currentUser]);
+
+  const voiceOnline = useMemo(
+    () => voiceMembers.filter((member) => member.presenceStatus === "online" || member.online),
+    [voiceMembers]
+  );
+  const voiceSpeakers = useMemo(() => voiceOnline.slice(0, 3), [voiceOnline]);
+  const voiceListeners = useMemo(
+    () => voiceMembers.filter((member) => !voiceSpeakers.some((speaker) => speaker.id === member.id)),
+    [voiceMembers, voiceSpeakers]
+  );
 
   if (!activeRoom) {
     return (
@@ -273,66 +318,8 @@ export default function ChatInterface({
     window.location.href = `/user/${memberId}`;
   };
 
-  return (
-    <section className="chat-interface glass">
-      <header className="chat-head">
-        <div className="chat-title-wrap">
-          {roomAvatarUrl ? <img src={roomAvatarUrl} alt={displayName} className="chat-avatar chat-avatar-image" /> : <div className="chat-avatar">{initials}</div>}
-          <div>
-            <h3>{displayName}</h3>
-            <p>{activeRoom.description || "chat"}</p>
-            {roomTypeLabel(activeRoom.roomType) ? <p className="chat-room-type">{roomTypeLabel(activeRoom.roomType)}</p> : null}
-          </div>
-        </div>
-
-        <div className="chat-head-actions">
-          <span className="member-pill">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="8.5" cy="7" r="4" />
-              <path d="M20 8v6M23 11h-6" />
-            </svg>
-            {memberCount}
-          </span>
-          <button
-            type="button"
-            className="ghost-btn head-link-btn icon-head-btn"
-            onClick={() => handleLaunchCall("audio")}
-            aria-label="Start audio call"
-            title="Start audio call"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="ghost-btn head-link-btn icon-head-btn"
-            onClick={() => handleLaunchCall("video")}
-            aria-label="Start video call"
-            title="Start video call"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="2" y="6" width="15" height="12" rx="2" ry="2" />
-              <polygon points="17 10 22 7 22 17 17 14 17 10" />
-            </svg>
-          </button>
-          {!isDirectChat ? (
-            <button type="button" className="ghost-btn head-link-btn" onClick={() => onLeaveRoom(activeRoom._id)}>Leave</button>
-          ) : null}
-          {!isDirectChat ? (
-            <button
-              type="button"
-              className="ghost-btn dots-btn"
-              aria-label="More options"
-              onClick={onOpenRoomSettings}
-            >
-              ...
-            </button>
-          ) : null}
-        </div>
-      </header>
-
+  const voiceChatContent = (
+    <>
       {callState?.incoming ? (
         <div className="call-banner">
           <span>{callState.incoming.fromName} is calling ({callState.incoming.callType === "video" ? "video" : "audio"})</span>
@@ -375,7 +362,7 @@ export default function ChatInterface({
               <div className="audio-visualizer" aria-hidden="true">
                 <span /><span /><span /><span /><span />
               </div>
-              <div className="audio-text">Voice channel active • crystal clear</div>
+              <div className="audio-text">Voice channel active - crystal clear</div>
               <audio ref={remoteVideoRef} autoPlay style={{ display: "none" }} />
             </div>
           )}
@@ -483,7 +470,10 @@ export default function ChatInterface({
                           {!hasOnlyAudio ? (
                             <div className={`msg-meta${showMeta ? "" : " subtle"}`}>
                               {showMeta ? <strong>{messageUserName}</strong> : null}
-                              <small>{formatTime(message.createdAt)}</small>
+                              <small>
+                                {formatTime(message.createdAt)}
+                                {message.isEdited ? <span className="msg-edited-tag"> (edited)</span> : null}
+                              </small>
                             </div>
                           ) : null}
 
@@ -639,6 +629,17 @@ export default function ChatInterface({
                               >
                                 Copy
                               </button>
+                              {canDeleteMessage(message) && message.content ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingMessage(message);
+                                    setActiveMenuId(null);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              ) : null}
                               {canDeleteMessage(message) ? (
                                 <button
                                   type="button"
@@ -703,10 +704,153 @@ export default function ChatInterface({
       </div>
       <MessageForm
         onSend={onSendMessage}
+        onEdit={onEditMessage}
+        editingMessage={editingMessage}
+        onCancelEdit={() => setEditingMessage(null)}
         draftInjection={draftInjection}
         onTypingStart={onTypingStart}
         onTypingStop={onTypingStop}
       />
-    </section>
+    </>
+  );
+
+  return (
+    <section className={`chat-interface glass${isVoiceRoom ? " voice-mode" : ""}`}>
+      <header className="chat-head">
+        <div className="chat-title-wrap">
+          {roomAvatarUrl ? <img src={roomAvatarUrl} alt={displayName} className="chat-avatar chat-avatar-image" /> : <div className="chat-avatar">{initials}</div>}
+          <div>
+            <h3>{displayName}</h3>
+            <p>{activeRoom.description || "chat"}</p>
+            {roomTypeLabel(activeRoom.roomType) ? <p className="chat-room-type">{roomTypeLabel(activeRoom.roomType)}</p> : null}
+          </div>
+        </div>
+
+        <div className="chat-head-actions">
+          <span className="member-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="8.5" cy="7" r="4" />
+              <path d="M20 8v6M23 11h-6" />
+            </svg>
+            {memberCount}
+          </span>
+          <button
+            type="button"
+            className="ghost-btn head-link-btn icon-head-btn"
+            onClick={() => handleLaunchCall("audio")}
+            aria-label="Start audio call"
+            title="Start audio call"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="ghost-btn head-link-btn icon-head-btn"
+            onClick={() => handleLaunchCall("video")}
+            aria-label="Start video call"
+            title="Start video call"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="6" width="15" height="12" rx="2" ry="2" />
+              <polygon points="17 10 22 7 22 17 17 14 17 10" />
+            </svg>
+          </button>
+          {!isDirectChat ? (
+            <button type="button" className="ghost-btn head-link-btn" onClick={() => onLeaveRoom(activeRoom._id)}>Leave</button>
+          ) : null}
+          {!isDirectChat ? (
+            <button
+              type="button"
+              className="ghost-btn dots-btn"
+              aria-label="More options"
+              onClick={onOpenRoomSettings}
+            >
+              ...
+            </button>
+          ) : null}
+        </div>
+      </header>
+
+      {isVoiceRoom ? (
+        <div className="voice-room">
+          <div className="voice-stage">
+            <div className="voice-stage-head">
+              <div>
+                <h4>Live Voice</h4>
+                <p>{voiceOnline.length} listening</p>
+              </div>
+              <div className="voice-stage-actions">
+                <button type="button" className="ghost-btn" onClick={() => handleLaunchCall("audio")}>
+                  Join voice
+                </button>
+                <button type="button" className="ghost-btn" onClick={onOpenRoomSettings}>
+                  Room info
+                </button>
+              </div>
+            </div>
+
+            <div className="voice-section">
+              <h5>Speakers</h5>
+              <div className="voice-speakers">
+                {voiceSpeakers.length ? voiceSpeakers.map((member) => {
+                  const avatarUrl = toAttachmentUrl(member.avatarUrl);
+                  const name = member.displayName || member.username || "Listener";
+                  const initials = name.slice(0, 2).toUpperCase();
+                  const isYou = member.id === currentUser?.id;
+                  return (
+                    <article key={member.id} className="voice-person-card speaker">
+                      <div className="voice-avatar" style={!avatarUrl ? { backgroundColor: member.avatarColor || "rgba(0,0,0,0.12)" } : undefined}>
+                        {avatarUrl ? <img src={avatarUrl} alt={name} /> : <span>{initials}</span>}
+                      </div>
+                      <div className="voice-person-meta">
+                        <strong>{isYou ? "You" : name}</strong>
+                        <small>{member.presenceStatus === "online" ? "Speaking" : "Away"}</small>
+                      </div>
+                      <span className="voice-live-ring" aria-hidden="true" />
+                    </article>
+                  );
+                }) : (
+                  <p className="muted">No active speakers yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="voice-section">
+              <h5>Listeners</h5>
+              <div className="voice-listeners">
+                {voiceListeners.map((member) => {
+                  const avatarUrl = toAttachmentUrl(member.avatarUrl);
+                  const name = member.displayName || member.username || "Listener";
+                  const initials = name.slice(0, 2).toUpperCase();
+                  const isYou = member.id === currentUser?.id;
+                  return (
+                    <article key={member.id} className="voice-person-card listener">
+                      <div className="voice-avatar" style={!avatarUrl ? { backgroundColor: member.avatarColor || "rgba(0,0,0,0.12)" } : undefined}>
+                        {avatarUrl ? <img src={avatarUrl} alt={name} /> : <span>{initials}</span>}
+                      </div>
+                      <div className="voice-person-meta">
+                        <strong>{isYou ? "You" : name}</strong>
+                        <small>{member.presenceStatus === "online" ? "Listening" : "Offline"}</small>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="voice-chat-panel">
+            {voiceChatContent}
+          </div>
+        </div>
+      ) : (
+        <div className="voice-chat-panel">
+          {voiceChatContent}
+        </div>
+      )}
+</section>
   );
 }

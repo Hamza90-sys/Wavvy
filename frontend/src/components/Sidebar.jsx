@@ -60,10 +60,24 @@ export default function Sidebar({
   const themePanelRef = useRef(null);
   const notificationsRef = useRef(null);
 
-  const filteredRooms = useMemo(
-    () => rooms.filter((room) => `${room.name} ${room.description || ""}`.toLowerCase().includes(query.toLowerCase())),
-    [rooms, query, nicknameTick]
-  );
+  const filteredRooms = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rooms;
+    return rooms.filter((room) => {
+      const isDirectChat = Boolean(room.isPrivate) && (room.members?.length === 2);
+      const otherMember = isDirectChat
+        ? room.members?.find((member) => (member._id || member.id) !== user?.id)
+        : null;
+      const nickname = isDirectChat
+        ? getDirectNickname(user?.id, otherMember?.id || otherMember?._id)
+        : "";
+      const directName = isDirectChat
+        ? `${nickname} ${otherMember?.displayName || ""} ${otherMember?.username || ""}`
+        : "";
+      const roomText = `${room.name || ""} ${room.description || ""} ${directName}`.toLowerCase();
+      return roomText.includes(term);
+    });
+  }, [rooms, query, nicknameTick, user]);
 
   const activeTheme = THEMES.find((item) => item.id === theme);
 

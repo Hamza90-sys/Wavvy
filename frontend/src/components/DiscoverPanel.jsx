@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -19,6 +19,9 @@ export default function DiscoverPanel({
   onStartChatUser = () => {},
   onOpenUser = () => {},
   onOpenRoom = () => {},
+  onSearchPeople = null,
+  searchPeopleResults = [],
+  searchPeopleLoading = false,
   filters = { waves: [], people: [], topics: [] }
 }) {
   const [query, setQuery] = useState("");
@@ -28,6 +31,17 @@ export default function DiscoverPanel({
     topics: filters?.topics || []
   };
   const filterSignature = JSON.stringify(normalizedFilters);
+
+  useEffect(() => {
+    if (!onSearchPeople) return;
+    const term = query.trim();
+    if (term.length < 2) {
+      onSearchPeople("");
+      return;
+    }
+    const handle = setTimeout(() => onSearchPeople(term), 260);
+    return () => clearTimeout(handle);
+  }, [onSearchPeople, query]);
 
   const { roomResults, peopleResults } = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -52,18 +66,30 @@ export default function DiscoverPanel({
     rooms.forEach((room) => {
       (room.members || []).forEach((member) => {
         if (!member || member._id === user?.id) return;
-        const existing = peopleMap.get(member._id) || { ...member, rooms: [] };
+        const memberId = member._id || member.id;
+        if (!memberId) return;
+        const existing = peopleMap.get(memberId) || { ...member, rooms: [] };
         existing.rooms.push(room);
-        peopleMap.set(member._id, existing);
+        peopleMap.set(memberId, existing);
       });
     });
 
-    const peopleResults = Array.from(peopleMap.values()).filter((person) =>
-      match(person.username || "") && matchAny(normalizedFilters.people, person.username || "")
-    );
+    (searchPeopleResults || []).forEach((person) => {
+      const personId = person._id || person.id || person.userId;
+      if (!personId || personId === user?.id) return;
+      if (!peopleMap.has(personId)) {
+        peopleMap.set(personId, { ...person, _id: personId, rooms: [] });
+      }
+    });
+
+    const peopleResults = Array.from(peopleMap.values()).filter((person) => {
+      const personText = `${person.username || ""} ${person.displayName || ""}`.trim();
+      if (!personText) return false;
+      return match(personText) && matchAny(normalizedFilters.people, personText);
+    });
 
     return { roomResults, peopleResults };
-  }, [rooms, query, user, filterSignature]);
+  }, [rooms, query, user, filterSignature, searchPeopleResults]);
 
   const results = useMemo(() => {
     const roomItems = roomResults.map((room) => {
@@ -81,12 +107,12 @@ export default function DiscoverPanel({
     });
 
     const peopleItems = peopleResults.map((person) => ({
-      id: person._id,
+      id: person._id || person.id,
       type: "User",
-      name: person.username,
+      name: person.displayName || person.username,
       avatarUrl: toAttachmentUrl(person.avatarUrl),
       avatarColor: person.avatarColor,
-      initials: getInitials(person.username),
+      initials: getInitials(person.displayName || person.username),
       person
     }));
 

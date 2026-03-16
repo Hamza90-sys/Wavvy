@@ -62,6 +62,8 @@ const canViewerSeeUser = (user, viewerId) => {
   return isFriend;
 };
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const serializeUser = (user, viewerId) => {
   const canSee = canViewerSeeUser(user, viewerId);
   return {
@@ -83,6 +85,35 @@ const serializeUser = (user, viewerId) => {
 };
 
 router.use(auth);
+
+router.get("/search", async (req, res) => {
+  try {
+    const query = (req.query.q || req.query.query || "").toString().trim();
+    if (query.length < 2) {
+      return res.json({ users: [] });
+    }
+
+    const viewer = await User.findById(req.user.id).select("blockedUsers");
+    const blockedIds = (viewer?.blockedUsers || []).map((id) => id.toString());
+    const regex = new RegExp(escapeRegex(query), "i");
+
+    const candidates = await User.find({
+      _id: { $nin: [req.user.id, ...blockedIds] },
+      blockedUsers: { $ne: req.user.id },
+      $or: [{ username: regex }, { displayName: regex }]
+    })
+      .select("username displayName avatarUrl avatarColor bio status presenceStatus lastSeen preferences followers following blockedUsers")
+      .limit(20);
+
+    const users = candidates
+      .filter((user) => canViewerSeeUser(user, req.user.id))
+      .map((user) => serializeUser(user, req.user.id));
+
+    return res.json({ users });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to search users", error: error.message });
+  }
+});
 
 router.get("/me", async (req, res) => {
   try {

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-export default function MessageForm({ onSend, draftInjection, onTypingStart = () => {}, onTypingStop = () => {} }) {
+export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEdit, draftInjection, onTypingStart = () => {}, onTypingStop = () => {} }) {
   const [text, setText] = useState("");
+  const [draftText, setDraftText] = useState("");
+  const prevEditingIdRef = useRef(null);
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -309,6 +311,28 @@ export default function MessageForm({ onSend, draftInjection, onTypingStart = ()
   }, [draftInjection, scheduleTyping]);
 
   useEffect(() => {
+    if (editingMessage) {
+      if (prevEditingIdRef.current !== editingMessage.id) {
+        if (!prevEditingIdRef.current) setDraftText(text);
+        setText(editingMessage.content || "");
+        prevEditingIdRef.current = editingMessage.id;
+      }
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          const len = (editingMessage.content || "").length;
+          inputRef.current.setSelectionRange(len, len);
+        }
+      }, 0);
+    } else {
+      if (prevEditingIdRef.current) {
+        setText(draftText);
+        prevEditingIdRef.current = null;
+      }
+    }
+  }, [editingMessage, text, draftText]);
+
+  useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -337,6 +361,15 @@ export default function MessageForm({ onSend, draftInjection, onTypingStart = ()
 
   const submit = (event) => {
     event.preventDefault();
+    if (editingMessage) {
+      const nextText = text.trim();
+      if (nextText && nextText !== editingMessage.content) {
+        onEdit(editingMessage.id, nextText);
+      }
+      onCancelEdit();
+      return;
+    }
+
     const voiceFiles = recordedVoice?.file ? [recordedVoice.file] : [];
     if (!text.trim() && !files.length && !voiceFiles.length) return;
 
@@ -431,8 +464,26 @@ export default function MessageForm({ onSend, draftInjection, onTypingStart = ()
           </button>
         </div>
       ) : (
-        <>
-          <div className="message-input-shell" onDrop={onDrop} onDragOver={(event) => event.preventDefault()}>
+        <div className="message-form-container">
+          {editingMessage ? (
+            <div className="editing-banner">
+              <div className="editing-banner-content">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+                <span>Editing Message</span>
+              </div>
+              <button type="button" className="close-btn ghost-btn compact" onClick={onCancelEdit} aria-label="Cancel editing">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          ) : null}
+          <div className="message-input-row">
+            <div className={`message-input-shell ${editingMessage ? "editing" : ""}`} onDrop={onDrop} onDragOver={(event) => event.preventDefault()}>
             <button
               ref={emojiButtonRef}
               type="button"
@@ -518,14 +569,21 @@ export default function MessageForm({ onSend, draftInjection, onTypingStart = ()
                 {recordedVoice?.file ? ` + voice ${formatTimer(recordedVoice.duration || 0)}` : ""}
               </small>
             ) : null}
+            </div>
+            <button className="primary-btn send-btn" type="submit" disabled={sending} aria-label={editingMessage ? "Save edit" : "Send message"}>
+              {editingMessage ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m22 2-7 20-4-9-9-4z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+              )}
+            </button>
           </div>
-          <button className="primary-btn send-btn" type="submit" disabled={sending} aria-label="Send message">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="m22 2-7 20-4-9-9-4z" />
-              <path d="M22 2 11 13" />
-            </svg>
-          </button>
-        </>
+        </div>
       )}
       {recordingError ? <small className="attach-hint error-text">{recordingError}</small> : null}
     </form>

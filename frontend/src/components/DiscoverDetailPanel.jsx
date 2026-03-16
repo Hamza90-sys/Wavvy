@@ -29,6 +29,7 @@ export default function DiscoverDetailPanel({
   pendingFollowIds = {},
   onBack = () => {},
   onFollowUser = async () => {},
+  onUnfollowUser = async () => {},
   onStartChatUser = async () => {},
   onOpenRoomChat = async () => {},
   onJoinRoom = async () => {}
@@ -36,6 +37,7 @@ export default function DiscoverDetailPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
+  const [confirmUnfollow, setConfirmUnfollow] = useState(false);
 
   const api = useMemo(
     () => axios.create({ baseURL: API_URL, headers: { Authorization: `Bearer ${token}` } }),
@@ -52,7 +54,14 @@ export default function DiscoverDetailPanel({
   );
 
   useEffect(() => {
+    if (!confirmUnfollow) return undefined;
+    const handle = setTimeout(() => setConfirmUnfollow(false), 4500);
+    return () => clearTimeout(handle);
+  }, [confirmUnfollow]);
+
+  useEffect(() => {
     if (!selection?.id || !selection?.type) return;
+    setConfirmUnfollow(false);
     let mounted = true;
     const load = async () => {
       setLoading(true);
@@ -169,14 +178,32 @@ export default function DiscoverDetailPanel({
                 type="button"
                 className="discover-action-btn primary"
                 onClick={async () => {
-                  await onFollowUser(profile.id);
+                  if (isFollowing) {
+                    if (!confirmUnfollow) {
+                      setConfirmUnfollow(true);
+                      return;
+                    }
+                    await onUnfollowUser(profile.id);
+                    setConfirmUnfollow(false);
+                  } else {
+                    await onFollowUser(profile.id);
+                  }
                   const { data: response } = await api.get(`/users/profile/${selection.id}`);
                   setData({ type: "user", ...response });
                 }}
-                disabled={!canFollow}
+                disabled={relationship.isSelf || isRequested}
               >
-                {isFollowing ? "Following" : isRequested ? "Requested" : showPrivateBanner ? "Send Follow Request" : "Follow"}
+                {isFollowing ? (confirmUnfollow ? "Unfollow?" : "Following") : isRequested ? "Requested" : showPrivateBanner ? "Send Follow Request" : "Follow"}
               </button>
+              {isFollowing && confirmUnfollow ? (
+                <button
+                  type="button"
+                  className="discover-action-btn secondary"
+                  onClick={() => setConfirmUnfollow(false)}
+                >
+                  Cancel
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>

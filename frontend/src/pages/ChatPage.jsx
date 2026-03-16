@@ -95,6 +95,8 @@ export default function ChatPage() {
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [pendingFollowIds, setPendingFollowIds] = useState({});
+  const [discoverPeople, setDiscoverPeople] = useState([]);
+  const [discoverPeopleLoading, setDiscoverPeopleLoading] = useState(false);
   const [aboutInfo, setAboutInfo] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -109,6 +111,7 @@ export default function ChatPage() {
   const remoteVideoRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const activeRoomIdRef = useRef(null);
+  const latestDiscoverSearchRef = useRef("");
   const isCallOnlyMode = useMemo(() => new URLSearchParams(window.location.search).get("callOnly") === "1", []);
   const initialLaunchParams = (() => {
     const params = new URLSearchParams(window.location.search);
@@ -164,6 +167,33 @@ export default function ChatPage() {
     setFollowers(followersRes.followers || []);
     setFollowing(followingRes.following || []);
   }, [api]);
+
+  const searchDiscoverPeople = useCallback(
+    async (term) => {
+      const trimmed = (term || "").trim();
+      latestDiscoverSearchRef.current = trimmed;
+      if (trimmed.length < 2) {
+        setDiscoverPeople([]);
+        return;
+      }
+      setDiscoverPeopleLoading(true);
+      try {
+        const { data } = await api.get("/users/search", { params: { q: trimmed } });
+        if (latestDiscoverSearchRef.current === trimmed) {
+          setDiscoverPeople(data.users || []);
+        }
+      } catch (_error) {
+        if (latestDiscoverSearchRef.current === trimmed) {
+          setDiscoverPeople([]);
+        }
+      } finally {
+        if (latestDiscoverSearchRef.current === trimmed) {
+          setDiscoverPeopleLoading(false);
+        }
+      }
+    },
+    [api]
+  );
 
   const loadMyRooms = useCallback(async () => {
     const { data } = await api.get("/users/rooms");
@@ -672,6 +702,13 @@ export default function ChatPage() {
       setMessages((prev) => prev.filter((message) => message._id !== messageId));
     };
 
+    const onMessageEdited = ({ roomId, messageId, message: updatedMessage }) => {
+      if (roomId !== activeRoom?._id) return;
+      setMessages((prev) => prev.map((msg) =>
+        msg._id === messageId ? { ...msg, content: updatedMessage.content, isEdited: true } : msg
+      ));
+    };
+
     const onCallInvite = ({ roomId, callType, from }) => {
       if (roomId !== activeRoomIdRef.current) return;
       setCallState((prev) => {
@@ -822,6 +859,7 @@ export default function ChatPage() {
     socket.on("presence:update", onPresenceUpdate);
     socket.on("messageReactionUpdated", onMessageReactionUpdated);
     socket.on("messageDeleted", onMessageDeleted);
+    socket.on("messageEdited", onMessageEdited);
     socket.on("call:invite", onCallInvite);
     socket.on("call:accepted", onCallAccepted);
     socket.on("call:rejected", onCallRejected);
@@ -840,6 +878,7 @@ export default function ChatPage() {
       socket.off("presence:update", onPresenceUpdate);
       socket.off("messageReactionUpdated", onMessageReactionUpdated);
       socket.off("messageDeleted", onMessageDeleted);
+      socket.off("messageEdited", onMessageEdited);
       socket.off("call:invite", onCallInvite);
       socket.off("call:accepted", onCallAccepted);
       socket.off("call:rejected", onCallRejected);
@@ -974,6 +1013,21 @@ export default function ChatPage() {
         return;
       }
       setMessages((prev) => prev.filter((message) => message._id !== messageId));
+    });
+  };
+
+  const editMessage = (messageId, newContent) => {
+    if (!activeRoom || !messageId) return;
+    socket?.emit("editMessage", { roomId: activeRoom._id, messageId, newContent }, (result) => {
+      if (!result?.ok) {
+        window.alert(result?.message || "Unable to edit this message.");
+        return;
+      }
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === messageId ? { ...msg, content: result.message.content, isEdited: true } : msg
+        )
+      );
     });
   };
 
@@ -1221,6 +1275,7 @@ export default function ChatPage() {
           onSendMessage={sendMessage}
           onToggleReaction={toggleReaction}
           onDeleteMessage={deleteMessage}
+          onEditMessage={editMessage}
           onLeaveRoom={leaveRoom}
           onDeleteRoom={deleteRoom}
           onOpenRoomInfo={() => (activeRoom ? loadRoomMedia(activeRoom._id) : Promise.resolve())}
@@ -1266,6 +1321,7 @@ export default function ChatPage() {
             pendingFollowIds={pendingFollowIds}
             onBack={() => setDiscoverSelection(null)}
             onFollowUser={handleFollowUser}
+            onUnfollowUser={handleUnfollow}
             onStartChatUser={startChatWithUser}
             onOpenRoomChat={openRoomFromDiscover}
             onJoinRoom={joinRoom}
@@ -1280,6 +1336,9 @@ export default function ChatPage() {
             onStartChatUser={startChatWithUser}
             onOpenUser={(id) => setDiscoverSelection({ type: "user", id })}
             onOpenRoom={(id) => setDiscoverSelection({ type: "room", id })}
+            onSearchPeople={searchDiscoverPeople}
+            searchPeopleResults={discoverPeople}
+            searchPeopleLoading={discoverPeopleLoading}
             filters={userSettings.discoverFilters}
           />
         )
@@ -1326,6 +1385,7 @@ export default function ChatPage() {
             onTypingStop={stopTyping}
             onToggleReaction={toggleReaction}
             onDeleteMessage={deleteMessage}
+            onEditMessage={editMessage}
             onLeaveRoom={leaveRoom}
             onOpenRoomSettings={openRoomSettings}
             onStartAudioCall={(roomId) => startCall(roomId, "audio")}
