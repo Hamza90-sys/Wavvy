@@ -10,10 +10,10 @@ function ModalShell({ open, title, onClose, children, footer }) {
           <h3>{title}</h3>
           <button type="button" className="ghost-btn" onClick={onClose}>Close</button>
         </div>
-        <div className="room-form" style={{ maxHeight: "65vh", overflowY: "auto" }}>
+        <div className="room-form modal-body-scroll">
           {children}
         </div>
-        {footer ? <div style={{ marginTop: "0.75rem" }}>{footer}</div> : null}
+        {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
     </div>,
     document.body
@@ -68,18 +68,18 @@ export function ProfileModal({ open, onClose, onSave, initialProfile }) {
       <label>
         Bio
         <textarea
+          className="modal-textarea"
           rows={3}
           value={form.bio}
           onChange={(e) => setForm((prev) => ({ ...prev, bio: e.target.value }))}
           maxLength={240}
-          style={{ resize: "vertical", minHeight: 80, padding: "10px", borderRadius: "10px", border: "1px solid rgba(0,0,0,0.12)" }}
         />
       </label>
-      <label className="checkbox-row">
-        <input type="file" accept="image/*" onChange={onFileChange} style={{ width: "220px" }} />
+      <label className="modal-file-row">
+        <input type="file" className="modal-file-input" accept="image/*" onChange={onFileChange} />
         <span>Profile photo</span>
       </label>
-      {preview ? <img src={preview} alt="Avatar preview" style={{ width: 120, height: 120, borderRadius: 14, objectFit: "cover" }} /> : null}
+      {preview ? <img src={preview} alt="Avatar preview" className="modal-avatar-preview" /> : null}
       {error ? <p className="danger-text">{error}</p> : null}
     </ModalShell>
   );
@@ -155,7 +155,7 @@ export function StatusModal({ open, onClose, onSave, initialStatus }) {
       </label>
       <label>
         Emoji
-        <input type="text" value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🌊" maxLength={4} />
+        <input type="text" value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder={"\u{1F30A}"} maxLength={4} />
       </label>
       <p className="muted">Short text or emoji to share your vibe. Updates broadcast in real-time.</p>
       {error ? <p className="danger-text">{error}</p> : null}
@@ -167,9 +167,9 @@ export function BlockedModal({ open, onClose, blocked = [], onUnblock }) {
   return (
     <ModalShell open={open} title="Blocked users" onClose={onClose}>
       {blocked.length === 0 ? <p className="muted">No blocked users.</p> : (
-        <div style={{ display: "grid", gap: "0.5rem" }}>
+        <div className="modal-list">
           {blocked.map((user) => (
-            <div key={user.id || user._id} className="settings-item" style={{ justifyContent: "space-between" }}>
+            <div key={user.id || user._id} className="settings-item settings-item-split">
               <span><strong>{user.displayName || user.username}</strong></span>
               <button type="button" className="ghost-btn" onClick={() => onUnblock(user.id || user._id)}>Unblock</button>
             </div>
@@ -189,12 +189,12 @@ export function VisibilityModal({ open, onClose, value, onSelect }) {
 
   return (
     <ModalShell open={open} title="Who can see me?" onClose={onClose}>
-      <div style={{ display: "grid", gap: "0.75rem" }}>
+      <div className="modal-list-wide">
         {options.map((option) => (
-          <label key={option.id} className="settings-item" style={{ justifyContent: "space-between" }}>
+          <label key={option.id} className="settings-item settings-item-split">
             <span>
               <strong>{option.label}</strong>
-              <small style={{ display: "block", color: "var(--muted)" }}>{option.description}</small>
+              <small className="modal-item-note">{option.description}</small>
             </span>
             <input type="radio" checked={value === option.id} onChange={() => onSelect(option.id)} />
           </label>
@@ -257,7 +257,7 @@ export function ReportModal({ open, onClose, onSubmit }) {
       </label>
       <label>
         Description
-        <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} style={{ resize: "vertical", padding: "10px" }} />
+        <textarea className="modal-textarea" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
       </label>
       {error ? <p className="danger-text">{error}</p> : null}
     </ModalShell>
@@ -287,13 +287,13 @@ export function FollowersModal({ open, onClose, followers = [], following = [], 
 
   return (
     <ModalShell open={open} title="Connections" onClose={onClose}>
-      <div style={{ display: "flex", gap: "0.5rem" }}>
+      <div className="modal-tab-row">
         <button type="button" className={tab === "followers" ? "primary-btn" : "ghost-btn"} onClick={() => setTab("followers")}>Followers</button>
         <button type="button" className={tab === "following" ? "primary-btn" : "ghost-btn"} onClick={() => setTab("following")}>Following</button>
       </div>
-      <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.5rem" }}>
+      <div className="modal-list modal-list-spaced">
         {list.length ? list.map((user) => (
-          <div key={user.id || user._id} className="settings-item" style={{ justifyContent: "space-between" }}>
+          <div key={user.id || user._id} className="settings-item settings-item-split">
             <span>{user.displayName || user.username}</span>
             {tab === "following" ? (
               <button type="button" className="ghost-btn" onClick={() => onUnfollow(user.id || user._id)}>Unfollow</button>
@@ -537,20 +537,18 @@ const LANGUAGE_OPTIONS = [
 export function LanguageModal({ open, onClose, value, onSelect }) {
   return (
     <ModalShell open={open} title="Choose language" onClose={onClose}>
-      <div style={{ display: "grid", gap: "0.5rem", maxHeight: "60vh", overflowY: "auto", paddingRight: 4 }}>
+      <div className="modal-list modal-scroll-pad">
         {LANGUAGE_OPTIONS.map((lang) => (
           <label
             key={lang.id}
-            className="settings-item language-option"
+            className="settings-item settings-item-split language-option language-option-row"
             data-selected={value === lang.id}
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", cursor: "pointer" }}
             onClick={() => onSelect(lang.id)}
           >
             <span>{lang.label}</span>
             <input
               type="radio"
               name="language"
-              style={{ marginLeft: "auto" }}
               checked={value === lang.id}
               onChange={() => onSelect(lang.id)}
             />

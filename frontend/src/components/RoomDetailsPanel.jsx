@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import VerifiedBadge from "./VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -99,7 +101,10 @@ export default function RoomDetailsPanel({
       >
         {!roomAvatarUrl ? displayName?.slice(0, 2).toUpperCase() : null}
       </div>
-      <h3>{displayName}</h3>
+      <h3 className="name-with-badge">
+        {displayName}
+        {isVerifiedUser(otherMember) ? <VerifiedBadge /> : null}
+      </h3>
       {!isDirectChat && activeRoom.description ? <p>{activeRoom.description}</p> : null}
       {isDirectChat && otherMember ? (
         <>
@@ -170,7 +175,10 @@ export default function RoomDetailsPanel({
                     </span>
                     <span className={isOnline ? "member-dot online" : "member-dot offline"} />
                   </div>
-                  <span className="member-name">{displayName}</span>
+                  <span className="member-name name-with-badge">
+                    {displayName}
+                    {isVerifiedUser(member) ? <VerifiedBadge /> : null}
+                  </span>
                   {canKick ? <button type="button" className="member-kick" onClick={() => onKickMember(activeRoom._id, memberId)}>x</button> : null}
                 </div>
               );

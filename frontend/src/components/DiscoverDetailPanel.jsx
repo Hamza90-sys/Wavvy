@@ -1,5 +1,7 @@
 import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
+import VerifiedBadge from "./VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -125,7 +127,6 @@ export default function DiscoverDetailPanel({
     const displayName = profile.displayName || profile.username;
     const isFollowing = relationship.isFollowing || followingIds.has(profile.id);
     const isRequested = relationship.hasPendingFollowRequest || Boolean(pendingFollowIds[profile.id]);
-    const canFollow = !relationship.isSelf && !isFollowing && !isRequested;
     const canChat = !relationship.isSelf && (!profile.isPrivate || isFollowing);
     const showPrivateBanner = profile.isPrivate && !relationship.isSelf;
     const presenceLabel = profile.presenceStatus === "online" ? "Online" : formatLastSeen(profile.lastSeen);
@@ -142,7 +143,10 @@ export default function DiscoverDetailPanel({
           <div className="profile-avatar-lg" style={!avatarUrl ? { backgroundColor: profile.avatarColor || "rgba(255,255,255,0.14)" } : undefined}>
             {avatarUrl ? <img src={avatarUrl} alt={displayName} /> : <span>{displayName?.slice(0, 2).toUpperCase()}</span>}
           </div>
-          <h1>{displayName}</h1>
+          <h1 className="name-with-badge">
+            {displayName}
+            {isVerifiedUser(profile) ? <VerifiedBadge /> : null}
+          </h1>
           <p className="profile-username">@{profile.username}</p>
           <p className={`profile-presence ${profile.presenceStatus === "online" ? "online" : ""}`}>{presenceLabel}</p>
           {showPrivateBanner ? <p className="profile-private-note">This user account is private</p> : null}
@@ -213,7 +217,7 @@ export default function DiscoverDetailPanel({
 
   const room = data.room || {};
   const avatarUrl = toAttachmentUrl(room.avatarUrl);
-  const isMember = roomFromList?.members?.some((member) => (member._id || member.id) === room.id) || room.isMember;
+  const isMember = Boolean(room.isMember || roomFromList?.isMember);
   const actionLabel = isMember ? "Open Room" : data.joinRequestPending ? "Request Sent" : room.isPrivate ? "Send Join Request" : "Join Room";
 
   return (
@@ -229,7 +233,10 @@ export default function DiscoverDetailPanel({
           {avatarUrl ? <img src={avatarUrl} alt={room.name} /> : <span>{room.name?.slice(0, 2).toUpperCase()}</span>}
         </div>
         <h1>{room.name}</h1>
-        <p className="profile-username">Admin: @{room.admin?.username || "unknown"}</p>
+        <p className="profile-username name-with-badge">
+          Admin: @{room.admin?.username || "unknown"}
+          {isVerifiedUser(room.admin) ? <VerifiedBadge /> : null}
+        </p>
         {room.description ? <p className="profile-bio">{room.description}</p> : null}
         <div className="profile-actions">
           <button

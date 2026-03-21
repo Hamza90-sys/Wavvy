@@ -13,6 +13,11 @@ router.use(auth);
 
 const loadActor = async (userId) =>
   User.findById(userId).select("_id username displayName avatarUrl avatarColor");
+const isDirectRoom = (room) => {
+  if (!room) return false;
+  const name = (room.name || "").toString();
+  return room.roomType === "direct" || (room.isPrivate && name.toLowerCase().startsWith("dm-"));
+};
 
 router.get("/", async (req, res) => {
   try {
@@ -68,6 +73,9 @@ router.post("/:notificationId/accept", async (req, res) => {
         return res.json({ ok: true, notification: serializeNotification(notification) });
       }
 
+      const requester = await loadActor(request.senderId);
+      const requesterName = requester?.displayName || requester?.username || "Someone";
+
       if (request.status === "pending") {
         request.status = "accepted";
         request.respondedAt = new Date();
@@ -86,20 +94,10 @@ router.post("/:notificationId/accept", async (req, res) => {
           },
           io
         );
-
-        const requester = await loadActor(request.senderId);
-        const requesterName = requester?.displayName || requester?.username || "Someone";
-        await createNotification(
-          {
-            type: "NEW_FOLLOWER",
-            senderId: request.senderId,
-            receiverId: request.receiverId,
-            requestId: request._id,
-            message: `${requesterName} started following you`
-          },
-          io
-        );
       }
+
+      notification.type = "NEW_FOLLOWER";
+      notification.message = `${requesterName} started following you`;
     } else if (notification.type === "JOIN_ROOM_REQUEST") {
       const request = await RoomJoinRequest.findOne({
         _id: notification.requestId,
@@ -116,6 +114,16 @@ router.post("/:notificationId/accept", async (req, res) => {
         notification.isRead = true;
         await notification.save();
         return res.json({ ok: true, notification: serializeNotification(notification) });
+      }
+
+      if (isDirectRoom(room)) {
+        request.status = "declined";
+        request.reviewedBy = req.user.id;
+        request.reviewedAt = new Date();
+        await request.save();
+        notification.isRead = true;
+        await notification.save();
+        return res.status(400).json({ message: "Direct chats cannot accept join requests" });
       }
 
       const isAdmin = room.createdBy.toString() === req.user.id || (room.admins || []).some((adminId) => adminId.toString() === req.user.id);

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { THEMES } from "../constants/themes";
 import NotificationsPanel from "./NotificationsPanel";
+import VerifiedBadge from "./VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -61,6 +63,7 @@ export default function Sidebar({
   const notificationsRef = useRef(null);
 
   const filteredRooms = useMemo(() => {
+    void nicknameTick;
     const term = query.trim().toLowerCase();
     if (!term) return rooms;
     return rooms.filter((room) => {
@@ -259,9 +262,20 @@ export default function Sidebar({
             return (
               <article key={room._id} className={isActive ? "room-card active" : "room-card"}>
                 <button type="button" onClick={() => (isMember ? onSelectRoom(room) : onJoinRoom(room._id))} className="room-main-btn">
-                  {roomAvatarUrl ? <img src={roomAvatarUrl} alt={room.name} className="room-avatar room-avatar-image" /> : <span className="room-avatar">{initials}</span>}
+                  {roomAvatarUrl ? (
+                    <img
+                      src={roomAvatarUrl}
+                      alt={room.name}
+                      className={`room-avatar room-avatar-image${isDirectChat ? " room-avatar-direct" : ""}`}
+                    />
+                  ) : (
+                    <span className={`room-avatar${isDirectChat ? " room-avatar-direct" : ""}`}>{initials}</span>
+                  )}
                   <span className="room-text">
-                    <strong>{displayName}</strong>
+                    <strong className="name-with-badge">
+                      {displayName}
+                      {isDirectChat && isVerifiedUser(otherMember) ? <VerifiedBadge /> : null}
+                    </strong>
                     <span>{isDirectChat ? "Direct chat" : (room.description || "chat")}</span>
                     {roomTypeLabel(room.roomType) ? <small className="room-type-text">{roomTypeLabel(room.roomType)}</small> : null}
                   </span>

@@ -4,6 +4,7 @@ const http = require("http");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
@@ -16,6 +17,14 @@ const notificationRoutes = require("./routes/notifications");
 const ChatRoom = require("./models/ChatRoom");
 const Message = require("./models/Message");
 const User = require("./models/User");
+const { repairDirectRooms } = require("./utils/directRoomMaintenance");
+const {
+  sanitizeRequestInput,
+  globalApiLimiter,
+  authLimiter,
+  writeApiLimiter,
+  uploadLimiter
+} = require("./middleware/security");
 
 mongoose.set("bufferCommands", false);
 
@@ -23,6 +32,7 @@ const app = express();
 const server = http.createServer(app);
 const userSockets = new Map();
 const voiceRooms = new Map();
+const socketEventState = new Map();
 
 // allow the frontend origin(s) to be configured via env var
 // `FRONTEND_URL` can be a single value or a comma-separated list
@@ -43,7 +53,18 @@ app.use(
     credentials: true
   })
 );
-app.use(express.json());
+app.disable("x-powered-by");
+if ((process.env.TRUST_PROXY || "").toLowerCase() === "true") {
+  app.set("trust proxy", 1);
+}
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false
+  })
+);
+app.use(express.json({ limit: "256kb" }));
+app.use(express.urlencoded({ extended: false, limit: "256kb" }));
+app.use(sanitizeRequestInput);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/", (_req, res) => {
@@ -59,11 +80,13 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/chatrooms", chatRoomRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/notifications", notificationRoutes);
+app.use("/api", globalApiLimiter);
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/chatrooms", writeApiLimiter, chatRoomRoutes);
+app.use("/api/messages/upload", uploadLimiter);
+app.use("/api/messages", writeApiLimiter, messageRoutes);
+app.use("/api/users", writeApiLimiter, userRoutes);
+app.use("/api/notifications", writeApiLimiter, notificationRoutes);
 
 const serializeMessage = (messageDoc) => ({
   _id: messageDoc._id,
@@ -200,6 +223,19 @@ const cleanupVoiceRoomForSocket = (socket) => {
   socket.voiceRoomId = null;
 };
 
+const allowSocketEvent = (socket, eventName, maxEvents, windowMs) => {
+  const now = Date.now();
+  const key = `${socket.id}:${eventName}`;
+  const entry = socketEventState.get(key);
+  if (!entry || now > entry.resetAt) {
+    socketEventState.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxEvents) return false;
+  entry.count += 1;
+  return true;
+};
+
 io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
@@ -245,6 +281,7 @@ io.on("connection", (socket) => {
   }
 
   socket.on("joinRoom", async ({ roomId }) => {
+    if (!allowSocketEvent(socket, "joinRoom", 30, 10_000)) return;
     if (!roomId) return;
 
     const room = await ChatRoom.findById(roomId).select("_id members");
@@ -263,6 +300,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("leaveRoom", async ({ roomId }) => {
+    if (!allowSocketEvent(socket, "leaveRoom", 30, 10_000)) return;
     if (!roomId) return;
 
     socket.to(roomId).emit("typing:stop", {
@@ -278,6 +316,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sendMessage", async ({ roomId, content, attachments = [] }) => {
+    if (!allowSocketEvent(socket, "sendMessage", 20, 10_000)) return;
     const text = (content || "").trim();
     const safeAttachments = Array.isArray(attachments) ? attachments : [];
     if (!roomId || (!text && !safeAttachments.length)) return;
@@ -325,6 +364,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("typing:start", async ({ roomId }) => {
+    if (!allowSocketEvent(socket, "typing:start", 50, 10_000)) return;
     if (!roomId) return;
     const isMember = await isMemberOfRoom(roomId, socket.user.id);
     if (!isMember) return;
@@ -337,6 +377,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("typing:stop", async ({ roomId }) => {
+    if (!allowSocketEvent(socket, "typing:stop", 50, 10_000)) return;
     if (!roomId) return;
     const isMember = await isMemberOfRoom(roomId, socket.user.id);
     if (!isMember) return;
@@ -348,6 +389,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("toggleReaction", async ({ roomId, messageId, emoji }, ack) => {
+    if (!allowSocketEvent(socket, "toggleReaction", 40, 10_000)) {
+      if (typeof ack === "function") ack({ ok: false, message: "Too many reaction requests. Please slow down." });
+      return;
+    }
     const done = (payload) => {
       if (typeof ack === "function") ack(payload);
     };
@@ -413,6 +458,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("deleteMessage", async ({ roomId, messageId }, ack) => {
+    if (!allowSocketEvent(socket, "deleteMessage", 20, 10_000)) {
+      if (typeof ack === "function") ack({ ok: false, message: "Too many delete requests. Please slow down." });
+      return;
+    }
     const done = (payload) => {
       if (typeof ack === "function") ack(payload);
     };
@@ -456,6 +505,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("editMessage", async ({ roomId, messageId, newContent }, ack) => {
+    if (!allowSocketEvent(socket, "editMessage", 30, 10_000)) {
+      if (typeof ack === "function") ack({ ok: false, message: "Too many edit requests. Please slow down." });
+      return;
+    }
     const done = (payload) => {
       if (typeof ack === "function") ack(payload);
     };
@@ -524,6 +577,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("call:invite", async ({ roomId, targetUserId, callType }) => {
+    if (!allowSocketEvent(socket, "call:invite", 12, 10_000)) return;
     if (!roomId || !targetUserId || !callType) return;
 
     const room = await ChatRoom.findById(roomId);
@@ -632,6 +686,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("voice:join", async ({ roomId }) => {
+    if (!allowSocketEvent(socket, "voice:join", 20, 10_000)) return;
     if (!roomId) return;
     const isMember = await isMemberOfRoom(roomId, socket.user.id);
     if (!isMember) return;
@@ -750,6 +805,12 @@ io.on("connection", (socket) => {
       const presenceDoc = await setPresenceState(socket.user.id, "offline");
       await emitPresenceForUser(socket.user.id, presenceDoc);
     }
+
+    for (const key of socketEventState.keys()) {
+      if (key.startsWith(`${socket.id}:`)) {
+        socketEventState.delete(key);
+      }
+    }
   });
 });
 
@@ -761,6 +822,9 @@ server.listen(port, () => {
 
 mongoose.connection.on("connected", () => {
   console.log("MongoDB connected");
+  repairDirectRooms({ logger: console }).catch((error) => {
+    console.error("[direct-room-repair] failed:", error.message);
+  });
 });
 
 mongoose.connection.on("error", (error) => {

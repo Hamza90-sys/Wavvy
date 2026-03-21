@@ -9,7 +9,7 @@ const chatRoomSchema = new mongoose.Schema(
     admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     isPrivate: { type: Boolean, default: false },
-    roomType: { type: String, enum: ["normal", "voice"], default: "normal" }
+    roomType: { type: String, enum: ["normal", "voice", "direct"], default: "normal" }
   },
   { timestamps: true }
 );

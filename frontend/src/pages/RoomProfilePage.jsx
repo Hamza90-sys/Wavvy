@@ -1,6 +1,8 @@
 import axios from "axios";
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import VerifiedBadge from "../components/VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 import { useAuth } from "../context/AuthContext";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
@@ -108,7 +110,10 @@ export default function RoomProfilePage() {
         </div>
 
         <h1>{room.name}</h1>
-        <p className="profile-username">Admin: @{room.admin?.username || "unknown"}</p>
+        <p className="profile-username name-with-badge">
+          Admin: @{room.admin?.username || "unknown"}
+          {isVerifiedUser(room.admin) ? <VerifiedBadge /> : null}
+        </p>
         <p className="muted">{adminName}</p>
         {room.description ? <p className="profile-bio">{room.description}</p> : null}
 

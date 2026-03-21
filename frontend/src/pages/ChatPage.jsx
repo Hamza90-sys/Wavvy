@@ -144,6 +144,10 @@ export default function ChatPage() {
     })),
     []
   );
+  const joinedRooms = useMemo(
+    () => rooms.filter((room) => room.members?.some((member) => (member._id || member.id) === user?.id)),
+    [rooms, user?.id]
+  );
   const loadProfile = useCallback(async () => {
     const { data } = await api.get("/users/me");
     const prefs = normalizePreferences(data.user?.preferences);
@@ -539,27 +543,23 @@ export default function ChatPage() {
     });
   }, [api]);
 
-  const loadMessages = async (roomId) => {
+  const loadMessages = useCallback(async (roomId) => {
     const { data } = await api.get(`/messages/${roomId}`);
     setMessages(data.messages || []);
-  };
+  }, [api]);
 
   const handleAcceptNotification = useCallback(
     async (notificationId) => {
       const { data } = await api.post(`/notifications/${notificationId}/accept`);
       const acceptedType = data.notification?.type;
-      if (acceptedType === "FOLLOW_REQUEST") {
-        setNotifications((prev) => prev.filter((item) => item.id !== notificationId));
-      } else {
-        setNotifications((prev) =>
-          prev.map((item) => (item.id === notificationId ? { ...item, ...(data.notification || {}), isRead: true } : item))
-        );
-      }
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === notificationId ? { ...item, ...(data.notification || {}), isRead: true } : item))
+      );
       setUnreadNotifications((prev) => Math.max(0, prev - 1));
       if (acceptedType === "JOIN_ROOM_REQUEST") {
         await loadRooms();
       }
-      if (acceptedType === "FOLLOW_REQUEST") {
+      if (acceptedType === "FOLLOW_REQUEST" || acceptedType === "NEW_FOLLOWER") {
         await loadConnections();
       }
     },
@@ -606,7 +606,7 @@ export default function ChatPage() {
     setRoomUsers(mapRoomUsers(activeRoom.members || []));
     loadMessages(activeRoom._id).catch(() => undefined);
     socket?.emit("joinRoom", { roomId: activeRoom._id });
-  }, [isCallOnlyMode, activeRoom, socket, mapRoomUsers]);
+  }, [isCallOnlyMode, activeRoom, socket, mapRoomUsers, loadMessages]);
 
   useEffect(() => {
     if (!socket || !callState.connecting || callState.inCall) return;
@@ -632,13 +632,30 @@ export default function ChatPage() {
     setCallState((prev) => ({ ...prev, awaitingPeer: false }));
   }, [socket, callState.connecting, callState.inCall, roomUsers, user, ensurePeerConnection, attachLocalTracksToPeerConnection]);
 
+  const selectRoom = useCallback(async (room) => {
+    const hasMembers = Array.isArray(room.members);
+    const isMember = hasMembers
+      ? room.members?.some((member) => (member._id || member.id) === user?.id)
+      : (room.isMember ?? true);
+    if (!isMember) return;
+    setActiveRoom(room);
+    setActivePane("chat");
+    setTypingUsers([]);
+    setMessages([]);
+    await loadMessages(room._id);
+    setRoomUsers(mapRoomUsers(room.members || []));
+    setRoomMedia([]);
+    setUnreadByRoom((prev) => ({ ...prev, [room._id]: 0 }));
+    socket?.emit("joinRoom", { roomId: room._id });
+  }, [user?.id, loadMessages, mapRoomUsers, socket]);
+
   useEffect(() => {
     if (isCallOnlyMode) return;
-    if (activeRoom || !rooms.length) return;
-    const roomToOpen = rooms.find((room) => room.members?.some((member) => (member._id || member.id) === user?.id));
+    if (activeRoom || !joinedRooms.length) return;
+    const roomToOpen = joinedRooms[0];
     if (!roomToOpen) return;
     selectRoom(roomToOpen).catch(() => undefined);
-  }, [rooms, activeRoom, user, isCallOnlyMode]);
+  }, [joinedRooms, activeRoom, isCallOnlyMode, selectRoom]);
 
   useEffect(() => {
     if (!socket) return;
@@ -890,23 +907,6 @@ export default function ChatPage() {
       socket.off("notification:new", onNotificationNew);
     };
   }, [socket, activeRoom, cleanupCall, ensurePeerConnection, startLocalMedia, attachLocalTracksToPeerConnection, mapRoomUsers, user, setUser, loadRooms, loadConnections]);
-
-  const selectRoom = async (room) => {
-    const hasMembers = Array.isArray(room.members);
-    const isMember = hasMembers
-      ? room.members?.some((member) => (member._id || member.id) === user?.id)
-      : (room.isMember ?? true);
-    if (!isMember) return;
-    setActiveRoom(room);
-    setActivePane("chat");
-    setTypingUsers([]);
-    setMessages([]);
-    loadMessages(room._id);
-    setRoomUsers(mapRoomUsers(room.members || []));
-    setRoomMedia([]);
-    setUnreadByRoom((prev) => ({ ...prev, [room._id]: 0 }));
-    socket?.emit("joinRoom", { roomId: room._id });
-  };
 
   const startChatWithUser = useCallback(
     async (userId) => {
@@ -1260,7 +1260,7 @@ export default function ChatPage() {
         <MobileChatApp
           user={user}
           connected={connected}
-          rooms={rooms}
+          rooms={joinedRooms}
           activeRoom={activeRoom}
           unreadByRoom={unreadByRoom}
           messages={messages}
@@ -1290,7 +1290,7 @@ export default function ChatPage() {
     <main className={`chat-shell ${activePane === "discover" ? "mode-discover" : ""}`}>
       <Sidebar
         user={user}
-        rooms={rooms}
+        rooms={joinedRooms}
         activeRoom={activeRoom}
         onSelectRoom={selectRoom}
         onCreateRoomOpen={() => setCreateOpen(true)}

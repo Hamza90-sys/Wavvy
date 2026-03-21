@@ -1,4 +1,6 @@
 import React from "react";
+import VerifiedBadge from "./VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -60,7 +62,10 @@ export default function NotificationsPanel({
                     )}
                   </span>
                   <div className="notification-copy">
-                    <strong>{senderName}</strong>
+                    <strong className="name-with-badge">
+                      {senderName}
+                      {isVerifiedUser(item.sender || item.senderId) ? <VerifiedBadge /> : null}
+                    </strong>
                     <p>{item.message}</p>
                     <small>{formatRelativeTime(item.createdAt)}</small>
                     {canAct(item) ? (

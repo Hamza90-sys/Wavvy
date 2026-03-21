@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import VerifiedBadge from "./VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
@@ -25,12 +27,14 @@ export default function DiscoverPanel({
   filters = { waves: [], people: [], topics: [] }
 }) {
   const [query, setQuery] = useState("");
-  const normalizedFilters = {
-    waves: filters?.waves || [],
-    people: filters?.people || [],
-    topics: filters?.topics || []
-  };
-  const filterSignature = JSON.stringify(normalizedFilters);
+  const normalizedFilters = useMemo(
+    () => ({
+      waves: filters?.waves || [],
+      people: filters?.people || [],
+      topics: filters?.topics || []
+    }),
+    [filters?.waves, filters?.people, filters?.topics]
+  );
 
   useEffect(() => {
     if (!onSearchPeople) return;
@@ -89,7 +93,7 @@ export default function DiscoverPanel({
     });
 
     return { roomResults, peopleResults };
-  }, [rooms, query, user, filterSignature, searchPeopleResults]);
+  }, [rooms, query, user, normalizedFilters, searchPeopleResults]);
 
   const results = useMemo(() => {
     const roomItems = roomResults.map((room) => {
@@ -183,7 +187,10 @@ export default function DiscoverPanel({
                             <span>{item.initials}</span>
                           )}
                         </span>
-                        <span className="discover-chip-name">{item.name}</span>
+                        <span className="discover-chip-name name-with-badge">
+                          {item.name}
+                          {isVerifiedUser(item.person) ? <VerifiedBadge /> : null}
+                        </span>
                         <span className="discover-chip-label">{item.type}</span>
                       </button>
                       <button
@@ -217,7 +224,10 @@ export default function DiscoverPanel({
                         <span>{item.initials}</span>
                       )}
                     </span>
-                    <span className="discover-chip-name">{item.name}</span>
+                    <span className="discover-chip-name name-with-badge">
+                      {item.name}
+                      {item.type === "User" && isVerifiedUser(item.person) ? <VerifiedBadge /> : null}
+                    </span>
                     <span className="discover-chip-label">{item.type}</span>
                   </button>
                 );

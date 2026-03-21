@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import MessageForm from "./MessageForm";
+import VerifiedBadge from "./VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 
 const formatTime = (dateString) => new Date(dateString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const reactionChoices = [
@@ -241,6 +243,7 @@ export default function ChatInterface({
     : null;
   const storedNickname = useMemo(() => {
     if (!isDirectChat) return "";
+    void nicknameTick;
     return getDirectNickname(currentUser?.id, otherMember?.id || otherMember?._id);
   }, [isDirectChat, currentUser?.id, otherMember?.id, otherMember?._id, nicknameTick]);
   const displayName = isDirectChat
@@ -309,13 +312,6 @@ export default function ChatInterface({
     url.searchParams.set("callType", type);
     url.searchParams.set("callOnly", "1");
     window.open(url.toString(), "_blank", "noopener");
-  };
-
-  const openDirectProfile = () => {
-    if (!isDirectChat || !otherMember) return;
-    const memberId = otherMember.id || otherMember._id;
-    if (!memberId) return;
-    window.location.href = `/user/${memberId}`;
   };
 
   const voiceChatContent = (
@@ -469,7 +465,12 @@ export default function ChatInterface({
                         <article className={`msg ${isOwnGroup ? "own" : ""}${hasOnlyAudio ? " voice-only" : ""}`}>
                           {!hasOnlyAudio ? (
                             <div className={`msg-meta${showMeta ? "" : " subtle"}`}>
-                              {showMeta ? <strong>{messageUserName}</strong> : null}
+                              {showMeta ? (
+                                <strong className="name-with-badge">
+                                  {messageUserName}
+                                  {isVerifiedUser(message.user || group.user) ? <VerifiedBadge /> : null}
+                                </strong>
+                              ) : null}
                               <small>
                                 {formatTime(message.createdAt)}
                                 {message.isEdited ? <span className="msg-edited-tag"> (edited)</span> : null}
@@ -718,9 +719,20 @@ export default function ChatInterface({
     <section className={`chat-interface glass${isVoiceRoom ? " voice-mode" : ""}`}>
       <header className="chat-head">
         <div className="chat-title-wrap">
-          {roomAvatarUrl ? <img src={roomAvatarUrl} alt={displayName} className="chat-avatar chat-avatar-image" /> : <div className="chat-avatar">{initials}</div>}
+          {roomAvatarUrl ? (
+            <img
+              src={roomAvatarUrl}
+              alt={displayName}
+              className={`chat-avatar chat-avatar-image${isDirectChat ? " chat-avatar-direct" : ""}`}
+            />
+          ) : (
+            <div className={`chat-avatar${isDirectChat ? " chat-avatar-direct" : ""}`}>{initials}</div>
+          )}
           <div>
-            <h3>{displayName}</h3>
+            <h3 className="name-with-badge">
+              {displayName}
+              {isVerifiedUser(otherMember) ? <VerifiedBadge /> : null}
+            </h3>
             <p>{activeRoom.description || "chat"}</p>
             {roomTypeLabel(activeRoom.roomType) ? <p className="chat-room-type">{roomTypeLabel(activeRoom.roomType)}</p> : null}
           </div>
@@ -806,7 +818,10 @@ export default function ChatInterface({
                         {avatarUrl ? <img src={avatarUrl} alt={name} /> : <span>{initials}</span>}
                       </div>
                       <div className="voice-person-meta">
-                        <strong>{isYou ? "You" : name}</strong>
+                        <strong className="name-with-badge">
+                          {isYou ? "You" : name}
+                          {isVerifiedUser(member) ? <VerifiedBadge /> : null}
+                        </strong>
                         <small>{member.presenceStatus === "online" ? "Speaking" : "Away"}</small>
                       </div>
                       <span className="voice-live-ring" aria-hidden="true" />
@@ -832,7 +847,10 @@ export default function ChatInterface({
                         {avatarUrl ? <img src={avatarUrl} alt={name} /> : <span>{initials}</span>}
                       </div>
                       <div className="voice-person-meta">
-                        <strong>{isYou ? "You" : name}</strong>
+                        <strong className="name-with-badge">
+                          {isYou ? "You" : name}
+                          {isVerifiedUser(member) ? <VerifiedBadge /> : null}
+                        </strong>
                         <small>{member.presenceStatus === "online" ? "Listening" : "Offline"}</small>
                       </div>
                     </article>

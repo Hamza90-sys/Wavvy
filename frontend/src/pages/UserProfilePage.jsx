@@ -1,6 +1,8 @@
 import axios from "axios";
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import VerifiedBadge from "../components/VerifiedBadge";
+import { isVerifiedUser } from "../constants/verifiedUsers";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 
@@ -132,7 +134,10 @@ export default function UserProfilePage() {
           {avatarUrl ? <img src={avatarUrl} alt={displayName} /> : <span>{displayName.slice(0, 2).toUpperCase()}</span>}
         </div>
 
-        <h1>{displayName}</h1>
+        <h1 className="name-with-badge">
+          {displayName}
+          {isVerifiedUser(profile) ? <VerifiedBadge /> : null}
+        </h1>
         <p className="profile-username">@{profile.username}</p>
         <p className={`profile-presence ${profile.presenceStatus === "online" ? "online" : ""}`}>{presenceLabel}</p>
 

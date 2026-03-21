@@ -32,6 +32,11 @@ const isRoomAdmin = (room, userId) =>
   room.createdBy?.toString?.() === userId || room.admins.some((adminId) => adminId.toString() === userId);
 
 const isRoomMember = (room, userId) => room.members.some((memberId) => memberId.toString() === userId);
+const isDirectRoom = (room) => {
+  if (!room) return false;
+  const name = (room.name || "").toString();
+  return room.roomType === "direct" || (room.isPrivate && name.toLowerCase().startsWith("dm-"));
+};
 
 const toSafeUser = (user, viewerId) => {
   if (!user) return user;
@@ -62,7 +67,12 @@ const scrubRoom = (roomDoc, viewerId) => {
 
 router.get("/", async (req, res) => {
   try {
-    const rooms = await ChatRoom.find({})
+    const rooms = await ChatRoom.find({
+      $or: [
+        { isPrivate: false },
+        { members: req.user.id }
+      ]
+    })
       .populate("createdBy", "username displayName avatarUrl avatarColor status preferences.visibility")
       .populate("admins", "username displayName avatarUrl avatarColor status preferences.visibility")
       .populate("members", "username displayName avatarUrl avatarColor status preferences.visibility")
@@ -90,7 +100,12 @@ router.post("/direct/:userId", async (req, res) => {
         { members: { $all: [req.user.id, targetUserId] } },
         { members: { $size: 2 } },
         { isPrivate: true },
-        { roomType: "normal" }
+        {
+          $or: [
+            { roomType: "direct" },
+            { roomType: "normal", name: { $regex: /^dm-/i } }
+          ]
+        }
       ]
     })
       .populate("createdBy admins members", "username displayName avatarUrl avatarColor status preferences.visibility");
@@ -106,7 +121,7 @@ router.post("/direct/:userId", async (req, res) => {
       name: safeName,
       description: "Direct chat",
       isPrivate: true,
-      roomType: "normal",
+      roomType: "direct",
       createdBy: req.user.id,
       admins: [req.user.id],
       members: [req.user.id, targetUserId]
@@ -154,6 +169,10 @@ router.post("/:roomId/join", async (req, res) => {
     const room = existingRoom;
     if (!room) {
       return res.status(404).json({ message: "Room not found" });
+    }
+
+    if (isDirectRoom(room)) {
+      return res.status(400).json({ message: "Direct chats are limited to two members" });
     }
 
     if (isRoomMember(room, req.user.id)) {
@@ -220,6 +239,9 @@ router.post("/:roomId/leave", async (req, res) => {
     const existingRoom = await ChatRoom.findById(req.params.roomId);
     if (!existingRoom) {
       return res.status(404).json({ message: "Room not found" });
+    }
+    if (isDirectRoom(existingRoom)) {
+      return res.status(400).json({ message: "Direct chats do not support leave. Delete chat if needed." });
     }
     if (existingRoom.createdBy.toString() === req.user.id) {
       return res.status(400).json({ message: "Room owner cannot leave. Delete room instead." });
