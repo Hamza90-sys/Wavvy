@@ -12,7 +12,7 @@ const toAttachmentUrl = (url) => {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return `${API_BASE}${url}`;
 };
-const roomTypeLabel = (roomType) => (roomType === "voice" ? "Voice chat" : "");
+const roomTypeLabel = (_roomType) => "";
 const getDirectNickname = (currentUserId, otherUserId) => {
   if (!currentUserId || !otherUserId) return "";
   try {
@@ -38,6 +38,10 @@ export default function Sidebar({
   user,
   rooms,
   activeRoom,
+  unreadByRoom = {},
+  roomActivityById = {},
+  callHistory = [],
+  onStartCallFromSidebar = () => {},
   onSelectRoom,
   onCreateRoomOpen,
   onJoinRoom,
@@ -83,6 +87,35 @@ export default function Sidebar({
   }, [rooms, query, nicknameTick, user]);
 
   const activeTheme = THEMES.find((item) => item.id === theme);
+  const formatRelativeTime = (value) => {
+    if (!value) return "";
+    const diffMs = Date.now() - new Date(value).getTime();
+    const diffSec = Math.max(1, Math.floor(diffMs / 1000));
+    if (diffSec < 60) return `${diffSec}s`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour}h`;
+    const diffDay = Math.floor(diffHour / 24);
+    return `${diffDay}d`;
+  };
+  const callsFilter = activePane === "calls-video" ? "video" : "audio";
+  const filteredCalls = useMemo(
+    () => (callHistory || []).filter((entry) => entry.callType === callsFilter),
+    [callHistory, callsFilter]
+  );
+  const formatActivityTime = (value) => {
+    if (!value) return "";
+    const diffMs = Date.now() - new Date(value).getTime();
+    const diffSec = Math.max(1, Math.floor(diffMs / 1000));
+    if (diffSec < 60) return `${diffSec}s`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour}h`;
+    const diffDay = Math.floor(diffHour / 24);
+    return `${diffDay}d`;
+  };
 
   useEffect(() => {
     if (!themeMenuOpen) return undefined;
@@ -139,8 +172,30 @@ export default function Sidebar({
         >
           <Icon path="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
         </button>
-        <button type="button" className="rail-btn" aria-label="Video"><Icon path="M15 10l5-3v10l-5-3zM4 6h11v12H4z" /></button>
-        <button type="button" className="rail-btn" aria-label="Calls"><Icon path="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.7 2.6a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.4a2 2 0 0 1 2.1-.4c.8.4 1.7.6 2.6.7A2 2 0 0 1 22 16.9z" /></button>
+        <button
+          type="button"
+          className={`rail-btn ${activePane === "calls-video" ? "active" : ""}`}
+          aria-label="Video Calls"
+          onClick={() => {
+            setThemeMenuOpen(false);
+            setNotificationsOpen(false);
+            onPaneChange("calls-video");
+          }}
+        >
+          <Icon path="M15 10l5-3v10l-5-3zM4 6h11v12H4z" />
+        </button>
+        <button
+          type="button"
+          className={`rail-btn ${activePane === "calls-audio" ? "active" : ""}`}
+          aria-label="Audio Calls"
+          onClick={() => {
+            setThemeMenuOpen(false);
+            setNotificationsOpen(false);
+            onPaneChange("calls-audio");
+          }}
+        >
+          <Icon path="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.7 2.6a2 2 0 0 1-.4 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.4a2 2 0 0 1 2.1-.4c.8.4 1.7.6 2.6.7A2 2 0 0 1 22 16.9z" />
+        </button>
         <div className="notifications-anchor">
           <button
             type="button"
@@ -244,6 +299,31 @@ export default function Sidebar({
               onStartChat={onStartChatNotification}
             />
           </div>
+        ) : activePane === "calls-video" || activePane === "calls-audio" ? (
+          <section className="calls-inline glass">
+            <header className="calls-inline-head">
+              <h3>{callsFilter === "video" ? "Video Calls" : "Audio Calls"}</h3>
+            </header>
+            <div className="calls-inline-list">
+              {filteredCalls.length ? filteredCalls.map((entry) => (
+                <article key={entry.id} className="calls-inline-item">
+                  <div className="calls-inline-copy">
+                    <strong>{entry.roomName || "Conversation"}</strong>
+                    <span>{entry.direction === "incoming" ? "Incoming" : "Outgoing"} • {formatRelativeTime(entry.createdAt)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-btn calls-inline-btn"
+                    onClick={() => onStartCallFromSidebar(entry.roomId, callsFilter)}
+                  >
+                    Call again
+                  </button>
+                </article>
+              )) : (
+                <p className="muted">No {callsFilter} calls yet.</p>
+              )}
+            </div>
+          </section>
         ) : (
           <div className="room-list">
           {filteredRooms.map((room) => {
@@ -259,6 +339,14 @@ export default function Sidebar({
               : room.name;
             const initials = displayName?.slice(0, 2).toUpperCase() || "RM";
             const roomAvatarUrl = toAttachmentUrl(isDirectChat ? otherMember?.avatarUrl : room.avatarUrl);
+            const activity = roomActivityById[room._id];
+            const unread = unreadByRoom[room._id] || 0;
+            const activityText = activity?.text || (isDirectChat ? "Direct chat" : (room.description || "chat"));
+            const activityTime = formatActivityTime(activity?.createdAt);
+            const isOwnActivity = (activity?.senderId || "") === (user?.id || "");
+            const previewText = activity?.senderName && !isDirectChat && !isOwnActivity
+              ? `${activity.senderName}: ${activityText}`
+              : activityText;
             return (
               <article key={room._id} className={isActive ? "room-card active" : "room-card"}>
                 <button type="button" onClick={() => (isMember ? onSelectRoom(room) : onJoinRoom(room._id))} className="room-main-btn">
@@ -274,12 +362,17 @@ export default function Sidebar({
                   <span className="room-text">
                     <strong className="name-with-badge">
                       {displayName}
-                      {isDirectChat && isVerifiedUser(otherMember) ? <VerifiedBadge /> : null}
+                      {isDirectChat && isVerifiedUser(otherMember) ? <VerifiedBadge className="sidebar-verified-badge" /> : null}
                     </strong>
-                    <span>{isDirectChat ? "Direct chat" : (room.description || "chat")}</span>
+                    <span className="room-preview-line">
+                      <span className="room-preview-text">{previewText}</span>
+                      {activityTime ? <small className="room-preview-time">{activityTime}</small> : null}
+                    </span>
                     {roomTypeLabel(room.roomType) ? <small className="room-type-text">{roomTypeLabel(room.roomType)}</small> : null}
                   </span>
-                  {!isDirectChat ? (
+                  {unread > 0 ? (
+                    <span className="room-unread-dot" aria-label={`${unread} unread messages`} />
+                  ) : !isDirectChat ? (
                     <small className="room-members">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />

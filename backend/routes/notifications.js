@@ -151,6 +151,21 @@ router.post("/:notificationId/accept", async (req, res) => {
           io
         );
       }
+    } else if (notification.type === "ROOM_INVITE") {
+      const room = await ChatRoom.findById(notification.roomId);
+      if (!room) {
+        notification.isRead = true;
+        await notification.save();
+        return res.json({ ok: true, notification: serializeNotification(notification) });
+      }
+
+      if (isDirectRoom(room)) {
+        notification.isRead = true;
+        await notification.save();
+        return res.status(400).json({ message: "Direct chats cannot be joined via invitation" });
+      }
+
+      await ChatRoom.findByIdAndUpdate(room._id, { $addToSet: { members: req.user.id } });
     } else {
       return res.status(400).json({ message: "This notification does not support accept action" });
     }

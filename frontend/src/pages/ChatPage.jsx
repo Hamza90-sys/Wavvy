@@ -65,6 +65,7 @@ export default function ChatPage() {
   const [activeRoom, setActiveRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [unreadByRoom, setUnreadByRoom] = useState({});
+  const [roomActivityById, setRoomActivityById] = useState({});
   const [roomUsers, setRoomUsers] = useState([]);
   const [roomMedia, setRoomMedia] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -103,6 +104,15 @@ export default function ChatPage() {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [typingUsers, setTypingUsers] = useState([]);
   const [discoverSelection, setDiscoverSelection] = useState(null);
+  const [callHistory, setCallHistory] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = JSON.parse(localStorage.getItem("wavvy_call_history_v1") || "[]");
+      return Array.isArray(stored) ? stored : [];
+    } catch {
+      return [];
+    }
+  });
 
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -129,6 +139,28 @@ export default function ChatPage() {
   });
 
   const api = useMemo(() => axios.create({ baseURL: API_URL, headers: { Authorization: `Bearer ${token}` } }), [token]);
+  const appendCallHistory = useCallback((entry) => {
+    setCallHistory((prev) => ([
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+        ...entry
+      },
+      ...prev
+    ].slice(0, 60)));
+  }, []);
+  const getMessagePreviewText = useCallback((message) => {
+    if (!message) return "";
+    const content = (message.content || "").trim();
+    if (content) return content;
+    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    if (!attachments.length) return "";
+    const hasAudio = attachments.some((file) => (file?.mimeType || "").startsWith("audio/"));
+    const hasImage = attachments.some((file) => (file?.mimeType || "").startsWith("image/"));
+    if (hasAudio) return "Sent a voice message";
+    if (hasImage) return "Sent an image";
+    return "Sent an attachment";
+  }, []);
   const mapRoomUsers = useCallback(
     (users) => (users || []).map((member) => ({
       id: member._id || member.id,
@@ -249,6 +281,11 @@ export default function ChatPage() {
       window.__wavvyAnalyticsDisabled = !userSettings.analytics;
     }
   }, [userSettings.analytics]);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("wavvy_call_history_v1", JSON.stringify(callHistory));
+    }
+  }, [callHistory]);
 
   useEffect(() => {
     if (!token) return;
@@ -509,8 +546,15 @@ export default function ChatPage() {
       if (callState.inCall || callState.connecting) return;
 
       const target = roomUsers.find((roomUser) => roomUser.id !== user?.id);
+      const roomMeta = rooms.find((room) => room._id === roomId);
 
       try {
+        appendCallHistory({
+          roomId,
+          roomName: roomMeta?.name || activeRoom?.name || "Conversation",
+          callType,
+          direction: "outgoing"
+        });
         setCallState({ connecting: true, inCall: false, callType, incoming: null, awaitingPeer: !target });
         setCallControls({ micMuted: false, cameraOff: callType !== "video", sharingScreen: false });
         currentCallRef.current = { roomId, targetUserId: target?.id || null, callType };
@@ -530,7 +574,7 @@ export default function ChatPage() {
         window.alert("Unable to start call. Please allow microphone/camera access.");
       }
     },
-    [socket, callState.inCall, callState.connecting, roomUsers, user, startLocalMedia, ensurePeerConnection, attachLocalTracksToPeerConnection, cleanupCall]
+    [socket, callState.inCall, callState.connecting, roomUsers, user, rooms, activeRoom?.name, appendCallHistory, startLocalMedia, ensurePeerConnection, attachLocalTracksToPeerConnection, cleanupCall]
   );
 
   const loadRooms = useCallback(async () => {
@@ -541,36 +585,74 @@ export default function ChatPage() {
       if (!prev) return prev;
       return nextRooms.find((room) => room._id === prev._id) || null;
     });
+    return nextRooms;
   }, [api]);
 
   const loadMessages = useCallback(async (roomId) => {
     const { data } = await api.get(`/messages/${roomId}`);
-    setMessages(data.messages || []);
-  }, [api]);
+    const nextMessages = data.messages || [];
+    setMessages(nextMessages);
+    const last = nextMessages[nextMessages.length - 1];
+    if (last) {
+      const senderId = last.user?._id || last.user?.id || "";
+      const senderName = last.user?.displayName || last.user?.username || "";
+      setRoomActivityById((prev) => ({
+        ...prev,
+        [roomId]: {
+          text: getMessagePreviewText(last),
+          createdAt: last.createdAt,
+          senderId,
+          senderName
+        }
+      }));
+    }
+  }, [api, getMessagePreviewText]);
 
   const handleAcceptNotification = useCallback(
     async (notificationId) => {
       const { data } = await api.post(`/notifications/${notificationId}/accept`);
       const acceptedType = data.notification?.type;
+      const acceptedRoomId = data.notification?.roomId;
       setNotifications((prev) =>
-        prev.map((item) => (item.id === notificationId ? { ...item, ...(data.notification || {}), isRead: true } : item))
+        prev.map((item) => (
+          item.id === notificationId
+            ? { ...item, ...(data.notification || {}), isRead: true, actionState: "accepted" }
+            : item
+        ))
       );
       setUnreadNotifications((prev) => Math.max(0, prev - 1));
       if (acceptedType === "JOIN_ROOM_REQUEST") {
         await loadRooms();
       }
+      if (acceptedType === "ROOM_INVITE") {
+        const updatedRooms = await loadRooms();
+        if (acceptedRoomId) {
+          const joinedRoom = (updatedRooms || []).find((room) => room._id === acceptedRoomId);
+          if (joinedRoom) {
+            setActiveRoom(joinedRoom);
+            setRoomUsers(mapRoomUsers(joinedRoom.members || []));
+            await loadMessages(joinedRoom._id);
+            socket?.emit("joinRoom", { roomId: joinedRoom._id });
+            setActivePane("chat");
+          }
+        }
+      }
       if (acceptedType === "FOLLOW_REQUEST" || acceptedType === "NEW_FOLLOWER") {
         await loadConnections();
       }
     },
-    [api, loadConnections, loadRooms]
+    [api, loadConnections, loadMessages, loadRooms, mapRoomUsers, socket]
   );
 
   const handleDeclineNotification = useCallback(
     async (notificationId) => {
       const { data } = await api.post(`/notifications/${notificationId}/decline`);
       setNotifications((prev) =>
-        prev.map((item) => (item.id === notificationId ? { ...item, ...(data.notification || {}), isRead: true } : item))
+        prev.map((item) => (
+          item.id === notificationId
+            ? { ...item, ...(data.notification || {}), isRead: true, actionState: "declined" }
+            : item
+        ))
       );
       setUnreadNotifications((prev) => Math.max(0, prev - 1));
     },
@@ -648,6 +730,16 @@ export default function ChatPage() {
     setUnreadByRoom((prev) => ({ ...prev, [room._id]: 0 }));
     socket?.emit("joinRoom", { roomId: room._id });
   }, [user?.id, loadMessages, mapRoomUsers, socket]);
+  const startCallFromSidebar = useCallback(
+    async (roomId, callType) => {
+      if (!roomId) return;
+      const room = joinedRooms.find((entry) => entry._id === roomId) || rooms.find((entry) => entry._id === roomId);
+      if (!room) return;
+      await selectRoom(room);
+      await startCall(roomId, callType);
+    },
+    [joinedRooms, rooms, selectRoom, startCall]
+  );
 
   useEffect(() => {
     if (isCallOnlyMode) return;
@@ -658,9 +750,37 @@ export default function ChatPage() {
   }, [joinedRooms, activeRoom, isCallOnlyMode, selectRoom]);
 
   useEffect(() => {
+    if (!socket || !joinedRooms.length) return;
+    joinedRooms.forEach((room) => {
+      if (room?._id) {
+        socket.emit("joinRoom", { roomId: room._id });
+      }
+    });
+  }, [socket, joinedRooms]);
+
+  useEffect(() => {
     if (!socket) return;
 
     const onNewMessage = (message) => {
+      const senderId = message.user?._id || message.user?.id || "";
+      const senderName = message.user?.displayName || message.user?.username || "";
+      setRoomActivityById((prev) => ({
+        ...prev,
+        [message.room]: {
+          text: getMessagePreviewText(message),
+          createdAt: message.createdAt,
+          senderId,
+          senderName
+        }
+      }));
+      setRooms((prev) => {
+        const index = prev.findIndex((room) => room._id === message.room);
+        if (index <= 0) return prev;
+        const next = [...prev];
+        const [target] = next.splice(index, 1);
+        next.unshift(target);
+        return next;
+      });
       if (message.room === activeRoom?._id) {
         setMessages((prev) => [...prev, message]);
         return;
@@ -669,6 +789,23 @@ export default function ChatPage() {
     };
 
     const onSystemMessage = (message) => {
+      setRoomActivityById((prev) => ({
+        ...prev,
+        [message.roomId]: {
+          text: message.content || "New activity",
+          createdAt: message.createdAt,
+          senderId: "",
+          senderName: ""
+        }
+      }));
+      setRooms((prev) => {
+        const index = prev.findIndex((room) => room._id === message.roomId);
+        if (index <= 0) return prev;
+        const next = [...prev];
+        const [target] = next.splice(index, 1);
+        next.unshift(target);
+        return next;
+      });
       if (message.roomId !== activeRoom?._id) return;
       setMessages((prev) => [...prev, { ...message, system: true }]);
     };
@@ -906,7 +1043,7 @@ export default function ChatPage() {
       socket.off("user:updated", onUserUpdated);
       socket.off("notification:new", onNotificationNew);
     };
-  }, [socket, activeRoom, cleanupCall, ensurePeerConnection, startLocalMedia, attachLocalTracksToPeerConnection, mapRoomUsers, user, setUser, loadRooms, loadConnections]);
+  }, [socket, activeRoom, cleanupCall, ensurePeerConnection, startLocalMedia, attachLocalTracksToPeerConnection, mapRoomUsers, user, setUser, loadRooms, loadConnections, getMessagePreviewText]);
 
   const startChatWithUser = useCallback(
     async (userId) => {
@@ -1096,6 +1233,13 @@ export default function ChatPage() {
     if (!incoming || !socket) return;
 
     try {
+      const roomMeta = rooms.find((room) => room._id === incoming.roomId);
+      appendCallHistory({
+        roomId: incoming.roomId,
+        roomName: roomMeta?.name || activeRoom?.name || incoming.fromName || "Conversation",
+        callType: incoming.callType,
+        direction: "incoming"
+      });
       currentCallRef.current = {
         roomId: incoming.roomId,
         targetUserId: incoming.fromUserId,
@@ -1292,6 +1436,10 @@ export default function ChatPage() {
         user={user}
         rooms={joinedRooms}
         activeRoom={activeRoom}
+        unreadByRoom={unreadByRoom}
+        roomActivityById={roomActivityById}
+        callHistory={callHistory}
+        onStartCallFromSidebar={startCallFromSidebar}
         onSelectRoom={selectRoom}
         onCreateRoomOpen={() => setCreateOpen(true)}
         onJoinRoom={joinRoom}
@@ -1428,6 +1576,14 @@ export default function ChatPage() {
         onUploadAvatar={uploadRoomAvatar}
         onDeleteRoom={deleteRoom}
         onKickMember={kickMember}
+        onSearchInviteCandidates={async (roomId, query) => {
+          const { data } = await api.get(`/chatrooms/${roomId}/invite-candidates`, { params: { q: query } });
+          return data.users || [];
+        }}
+        onInviteToRoom={async (roomId, userId) => {
+          const { data } = await api.post(`/chatrooms/${roomId}/invite/${userId}`);
+          return data;
+        }}
       />
       <LanguageModal
         open={languageModalOpen}

@@ -8,6 +8,8 @@
   display: grid;
   grid-template-rows: auto auto 1fr;
   min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .sidebar-main.theme-open {
@@ -36,6 +38,7 @@
   margin-top: 12px;
   padding-right: 2px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   gap: 10px;
   align-content: start;
@@ -88,7 +91,93 @@
 .room-text span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .room-text { display: grid; text-align: left; }
 .room-text strong { font-weight: 800; }
+.room-text .name-with-badge { min-width: 0; }
+.room-card .room-text .sidebar-verified-badge,
+.room-card.active .room-text .sidebar-verified-badge {
+  width: 16px;
+  height: 16px;
+  color: #1195ff !important;
+  background: transparent !important;
+  box-shadow: none;
+  transform: translateY(0);
+}
+.room-card .room-text .sidebar-verified-badge svg,
+.room-card.active .room-text .sidebar-verified-badge svg {
+  width: 15px;
+  height: 15px;
+}
 .room-text span { color: var(--muted); font-size: 0.88rem; }
+.room-preview-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.room-preview-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-preview-time {
+  color: var(--muted);
+  opacity: 0.9;
+  font-size: 0.82rem;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.room-unread-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--primary-strong);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.24);
+  flex: 0 0 auto;
+}
+.calls-inline {
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel-strong) 0%, var(--panel) 100%);
+  padding: 12px;
+}
+.calls-inline-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.calls-inline-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+.calls-inline-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 9px 10px;
+}
+.calls-inline-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.calls-inline-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calls-inline-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.calls-inline-btn {
+  padding: 6px 9px;
+  white-space: nowrap;
+}
 .room-text .room-type-text {
   color: var(--primary-strong);
   font-size: 0.76rem;
@@ -1588,6 +1677,7 @@ body[data-theme="noir"] .more-launcher:hover {
   position: relative;
   flex: 1;
   display: flex;
+  direction: ltr;
   align-items: center;
   gap: 10px;
   border-radius: 16px;
@@ -1607,6 +1697,9 @@ body[data-theme="noir"] .more-launcher:hover {
   flex: 1;
   border: 0;
   background: transparent;
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
   color: var(--text);
   font-size: 1rem;
   outline: none;

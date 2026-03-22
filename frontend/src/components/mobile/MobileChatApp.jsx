@@ -22,7 +22,7 @@ const formatTime = (dateString) =>
   dateString ? new Date(dateString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 
 const isImage = (mimeType = "") => mimeType.startsWith("image/");
-const roomTypeLabel = (roomType) => (roomType === "voice" ? "Voice chat" : "");
+const roomTypeLabel = (_roomType) => "";
 
 function WaveLogo() {
   return (

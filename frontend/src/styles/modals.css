@@ -569,6 +569,39 @@
 .room-member-menu button.danger {
   color: var(--danger);
 }
+.room-invite-box {
+  margin-top: 8px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.room-invite-input {
+  margin-top: 0;
+}
+.room-invite-results {
+  display: grid;
+  gap: 8px;
+}
+.room-invite-item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: var(--panel);
+}
+.room-invite-send {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+.room-invite-feedback {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
 
 .room-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(142px, 1fr)); gap: 10px; }
 .room-media-item {

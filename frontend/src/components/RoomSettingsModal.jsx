@@ -9,7 +9,7 @@ const toAttachmentUrl = (url) => {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return `${API_BASE}${url}`;
 };
-const roomTypeLabel = (roomType) => (roomType === "voice" ? "Voice chat" : "");
+const roomTypeLabel = (_roomType) => "";
 
 export default function RoomSettingsModal({
   open,
@@ -22,7 +22,9 @@ export default function RoomSettingsModal({
   onSaveRoom,
   onUploadAvatar,
   onDeleteRoom,
-  onKickMember
+  onKickMember,
+  onSearchInviteCandidates = async () => [],
+  onInviteToRoom = async () => ({ ok: false })
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -32,6 +34,11 @@ export default function RoomSettingsModal({
   const [editingName, setEditingName] = useState(false);
   const [activeMemberMenuId, setActiveMemberMenuId] = useState("");
   const [activeNicknameEditorId, setActiveNicknameEditorId] = useState("");
+  const [inviteQuery, setInviteQuery] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteResults, setInviteResults] = useState([]);
+  const [invitingUserId, setInvitingUserId] = useState("");
+  const [inviteMessage, setInviteMessage] = useState("");
   const creatorId = activeRoom?.createdBy?._id || activeRoom?.createdBy?.id || activeRoom?.createdBy;
   const isAdmin = useMemo(
     () => activeRoom?.admins?.some((admin) => (admin._id || admin.id) === currentUser?.id) || creatorId === currentUser?.id,
@@ -63,6 +70,9 @@ export default function RoomSettingsModal({
     setName(activeRoom.name || "");
     setDescription(activeRoom.description || "");
     setEditingName(false);
+    setInviteQuery("");
+    setInviteResults([]);
+    setInviteMessage("");
   }, [activeRoom]);
 
   useEffect(() => {
@@ -97,6 +107,33 @@ export default function RoomSettingsModal({
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!open || !activeRoom?._id || !isAdmin) return;
+    const query = inviteQuery.trim();
+    if (query.length < 2) {
+      setInviteResults([]);
+      setInviteLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setInviteLoading(true);
+    Promise.resolve(onSearchInviteCandidates(activeRoom._id, query))
+      .then((users) => {
+        if (cancelled) return;
+        setInviteResults(Array.isArray(users) ? users : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInviteResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setInviteLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRoom?._id, inviteQuery, isAdmin, onSearchInviteCandidates, open]);
 
   if (!open || !activeRoom) return null;
 
@@ -319,6 +356,70 @@ export default function RoomSettingsModal({
               );
             })}
           </div>
+          {isAdmin ? (
+            <div className="room-invite-box">
+              <strong>Invite users</strong>
+              <p className="room-settings-muted">Search by username. Users must follow the admin to be eligible.</p>
+              <input
+                type="text"
+                className="room-member-nickname-field room-invite-input"
+                value={inviteQuery}
+                onChange={(event) => {
+                  setInviteQuery(event.target.value);
+                  setInviteMessage("");
+                }}
+                placeholder="Type username..."
+              />
+              {inviteLoading ? <p className="room-settings-muted">Searching...</p> : null}
+              {!inviteLoading && inviteQuery.trim().length >= 2 && !inviteResults.length ? (
+                <p className="room-settings-muted">No eligible users found.</p>
+              ) : null}
+              <div className="room-invite-results">
+                {inviteResults.map((user) => {
+                  const userId = user.id || user._id;
+                  const avatarUrl = toAttachmentUrl(user.avatarUrl);
+                  const displayName = user.displayName || user.username || "User";
+                  return (
+                    <div key={userId} className="room-invite-item">
+                      <div className="room-member-avatar-wrap">
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt={displayName} className="room-member-avatar" />
+                        ) : (
+                          <span className="room-member-avatar room-member-avatar-fallback">
+                            {displayName.slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="room-member-meta">
+                        <span className="member-name">{displayName}</span>
+                        <small className="room-member-handle">@{user.username}</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="primary-btn room-invite-send"
+                        disabled={invitingUserId === userId}
+                        onClick={async () => {
+                          setInvitingUserId(userId);
+                          setInviteMessage("");
+                          try {
+                            const response = await onInviteToRoom(activeRoom._id, userId);
+                            setInviteMessage(response?.alreadyInvited ? "Invitation already sent." : "Invitation sent.");
+                          } catch (error) {
+                            setInviteMessage(error?.response?.data?.message || "Unable to send invitation.");
+                          } finally {
+                            setInvitingUserId("");
+                          }
+                        }}
+                      >
+                        {invitingUserId === userId ? "Sending..." : "Send invitation"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {inviteMessage ? <p className="room-invite-feedback">{inviteMessage}</p> : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="room-settings-section">

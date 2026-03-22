@@ -694,6 +694,581 @@ body[data-theme="liquid"] .msg.own::after {
   pointer-events: none;
 }
 
+/* Enhanced liquid glass pass: depth, highlights, diffusion, and capsule controls */
+body[data-theme="liquid"] .glass,
+body[data-theme="liquid"] .room-card,
+body[data-theme="liquid"] .chat-interface,
+body[data-theme="liquid"] .sidebar,
+body[data-theme="liquid"] .chat-head,
+body[data-theme="liquid"] .theme-menu,
+body[data-theme="liquid"] .message-form,
+body[data-theme="liquid"] .auth-card,
+body[data-theme="liquid"] .notifications-panel {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.07) 55%, rgba(120, 140, 190, 0.12) 100%);
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  box-shadow:
+    0 10px 30px rgba(255, 100, 200, 0.2),
+    0 0 20px rgba(100, 150, 255, 0.17),
+    0 28px 64px rgba(8, 12, 24, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.32),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.22);
+}
+
+body[data-theme="liquid"] .room-card::before,
+body[data-theme="liquid"] .chat-interface::before,
+body[data-theme="liquid"] .sidebar::before,
+body[data-theme="liquid"] .chat-head::before,
+body[data-theme="liquid"] .message-form::before {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.05) 48%, rgba(255, 255, 255, 0) 72%);
+  opacity: 0.75;
+}
+
+body[data-theme="liquid"] .room-card::after,
+body[data-theme="liquid"] .chat-interface::after,
+body[data-theme="liquid"] .sidebar::after,
+body[data-theme="liquid"] .chat-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.02), rgba(20, 28, 56, 0.36), rgba(0, 0, 0, 0.02));
+  pointer-events: none;
+}
+
+body[data-theme="liquid"] .primary-btn,
+body[data-theme="liquid"] .ghost-btn,
+body[data-theme="liquid"] .danger-btn,
+body[data-theme="liquid"] .block-btn,
+body[data-theme="liquid"] .message-form .send-btn {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+  box-shadow:
+    0 10px 30px rgba(255, 100, 200, 0.25),
+    0 0 20px rgba(100, 150, 255, 0.15),
+    inset 0 1px 2px rgba(255, 255, 255, 0.3),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.2);
+}
+
+body[data-theme="liquid"] .primary-btn,
+body[data-theme="liquid"] .message-form .send-btn {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.05) 44%, rgba(255, 255, 255, 0) 66%),
+    linear-gradient(135deg, #ff8a46 0%, #ff4da4 52%, #5f7dff 100%);
+}
+
+body[data-theme="liquid"] .ghost-btn {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 44%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(135deg, rgba(84, 239, 255, 0.26) 0%, rgba(92, 132, 255, 0.24) 52%, rgba(155, 99, 255, 0.24) 100%);
+}
+
+body[data-theme="liquid"] .danger-btn,
+body[data-theme="liquid"] .block-btn {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.06) 44%, rgba(255, 255, 255, 0) 68%),
+    linear-gradient(135deg, #ff8750 0%, #ff4e88 55%, #e03f6c 100%);
+}
+
+body[data-theme="liquid"] .primary-btn:hover,
+body[data-theme="liquid"] .ghost-btn:hover,
+body[data-theme="liquid"] .danger-btn:hover,
+body[data-theme="liquid"] .block-btn:hover,
+body[data-theme="liquid"] .message-form .send-btn:hover {
+  transform: scale(1.03);
+  filter: brightness(1.08);
+  box-shadow:
+    0 12px 34px rgba(255, 100, 200, 0.3),
+    0 0 24px rgba(100, 150, 255, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.35),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.2);
+}
+
+body[data-theme="liquid"] .msg {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.05) 46%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(140deg, rgba(120, 170, 255, 0.15) 0%, rgba(255, 145, 170, 0.1) 100%);
+  box-shadow:
+    0 12px 30px rgba(6, 10, 20, 0.24),
+    0 0 20px rgba(100, 150, 255, 0.18),
+    inset 0 1px 2px rgba(255, 255, 255, 0.32),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(28px) saturate(185%);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+}
+
+body[data-theme="liquid"] .msg.own {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.07) 44%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(135deg, rgba(255, 121, 171, 0.72) 0%, rgba(119, 136, 255, 0.7) 52%, rgba(76, 207, 231, 0.72) 100%);
+  box-shadow:
+    0 14px 34px rgba(255, 96, 184, 0.28),
+    0 0 24px rgba(101, 151, 255, 0.24),
+    inset 0 1px 2px rgba(255, 255, 255, 0.34),
+    inset 0 -2px 8px rgba(25, 10, 44, 0.28);
+}
+
+body[data-theme="liquid"] .room-card,
+body[data-theme="liquid"] .rail-btn,
+body[data-theme="liquid"] .theme-menu-item {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease, border-color 0.25s ease;
+}
+
+body[data-theme="liquid"] .room-card:hover,
+body[data-theme="liquid"] .rail-btn:hover,
+body[data-theme="liquid"] .theme-menu-item:hover {
+  transform: scale(1.02);
+  filter: brightness(1.06);
+  box-shadow:
+    0 12px 30px rgba(255, 100, 200, 0.2),
+    0 0 20px rgba(100, 150, 255, 0.15);
+}
+
+/* Layout-level liquid refinement for chat view */
+body[data-theme="liquid"] .chat-shell {
+  gap: 14px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.6), transparent 34%),
+    radial-gradient(circle at 78% 16%, rgba(255, 140, 110, 0.2), transparent 42%),
+    radial-gradient(circle at 52% 92%, rgba(95, 140, 255, 0.25), transparent 48%),
+    linear-gradient(156deg, #e4e8f1 0%, #d8deea 52%, #c8d2e2 100%);
+}
+
+body[data-theme="liquid"] .sidebar-main {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.48), transparent 38%),
+    linear-gradient(170deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08) 56%, rgba(130, 146, 190, 0.14) 100%);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+}
+
+body[data-theme="liquid"] .icon-rail {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.28), transparent 40%),
+    linear-gradient(180deg, rgba(36, 48, 88, 0.9) 0%, rgba(44, 60, 112, 0.86) 48%, rgba(54, 75, 136, 0.82) 100%);
+}
+
+body[data-theme="liquid"] .search-wrap,
+body[data-theme="liquid"] .message-input-shell {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06) 52%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(150deg, rgba(114, 168, 255, 0.14), rgba(255, 154, 192, 0.1));
+  box-shadow:
+    0 10px 24px rgba(9, 12, 28, 0.18),
+    inset 0 1px 2px rgba(255, 255, 255, 0.34),
+    inset 0 -2px 7px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(26px) saturate(175%);
+  -webkit-backdrop-filter: blur(26px) saturate(175%);
+}
+
+body[data-theme="liquid"] .room-card {
+  border-color: rgba(255, 255, 255, 0.24);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.32), transparent 40%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07) 55%, rgba(132, 151, 200, 0.14) 100%);
+}
+
+body[data-theme="liquid"] .room-card.active {
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow:
+    0 18px 34px rgba(120, 145, 220, 0.22),
+    0 0 22px rgba(255, 120, 180, 0.18),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.2);
+}
+
+body[data-theme="liquid"] .room-unread-dot {
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(145deg, #ff8c56 0%, #ff4e9d 55%, #5f81ff 100%);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.34),
+    0 0 16px rgba(255, 96, 181, 0.5);
+}
+
+body[data-theme="liquid"] .chat-head,
+body[data-theme="liquid"] .room-details {
+  border-color: rgba(255, 255, 255, 0.24);
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.32), transparent 42%),
+    linear-gradient(170deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08) 58%, rgba(125, 146, 196, 0.14) 100%);
+}
+
+body[data-theme="liquid"] .message-list {
+  background:
+    radial-gradient(circle at 70% 8%, rgba(255, 172, 206, 0.15), transparent 34%),
+    radial-gradient(circle at 28% 100%, rgba(124, 166, 255, 0.18), transparent 40%);
+}
+
+body[data-theme="liquid"] .msg {
+  border-radius: 18px 18px 18px 9px;
+}
+
+body[data-theme="liquid"] .msg.own {
+  border-radius: 18px 18px 9px 18px;
+}
+
+body[data-theme="liquid"] .message-form .send-btn {
+  min-width: 58px;
+  height: 52px;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+body[data-theme="liquid"] .member-pill,
+body[data-theme="liquid"] .head-link-btn,
+body[data-theme="liquid"] .dots-btn,
+body[data-theme="liquid"] .details-member-row {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.05) 58%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(145deg, rgba(114, 168, 255, 0.13), rgba(255, 158, 210, 0.08));
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.16);
+}
+
+body[data-theme="liquid"] .head-link-btn:hover,
+body[data-theme="liquid"] .dots-btn:hover {
+  transform: scale(1.04);
+  filter: brightness(1.08);
+}
+
+body[data-theme="liquid"] .room-card .room-text .sidebar-verified-badge,
+body[data-theme="liquid"] .room-card.active .room-text .sidebar-verified-badge {
+  color: #1f9eff !important;
+  filter: drop-shadow(0 0 8px rgba(31, 158, 255, 0.42));
+}
+
+body[data-theme="liquid"] .message-form {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Keep emoji picker and popovers visible above composer */
+body[data-theme="liquid"] .message-form,
+body[data-theme="prism"] .message-form {
+  overflow: visible;
+}
+
+@media (max-width: 1180px) {
+  body[data-theme="liquid"] .chat-shell {
+    gap: 10px;
+    padding: 10px;
+  }
+}
+
+body[data-theme="prism"] .glass,
+body[data-theme="prism"] .room-card,
+body[data-theme="prism"] .chat-interface,
+body[data-theme="prism"] .sidebar,
+body[data-theme="prism"] .chat-head,
+body[data-theme="prism"] .theme-menu,
+body[data-theme="prism"] .message-form,
+body[data-theme="prism"] .auth-card,
+body[data-theme="prism"] .notifications-panel,
+body[data-theme="prism"] .room-details {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 44%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07) 52%, rgba(124, 142, 210, 0.18) 100%);
+  backdrop-filter: blur(38px) saturate(195%);
+  -webkit-backdrop-filter: blur(38px) saturate(195%);
+  box-shadow:
+    0 10px 40px rgba(255, 120, 200, 0.25),
+    0 0 20px rgba(120, 160, 255, 0.15),
+    0 28px 64px rgba(8, 11, 24, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.25),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+body[data-theme="prism"] .room-card::before,
+body[data-theme="prism"] .chat-interface::before,
+body[data-theme="prism"] .sidebar::before,
+body[data-theme="prism"] .chat-head::before,
+body[data-theme="prism"] .message-form::before,
+body[data-theme="prism"] .room-details::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06) 48%, rgba(255, 255, 255, 0) 74%);
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+body[data-theme="prism"] .room-card::after,
+body[data-theme="prism"] .chat-interface::after,
+body[data-theme="prism"] .sidebar::after,
+body[data-theme="prism"] .chat-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0), rgba(30, 44, 88, 0.4), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
+body[data-theme="prism"] .chat-shell {
+  gap: 14px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 14% 10%, rgba(255, 255, 255, 0.44), transparent 32%),
+    radial-gradient(circle at 84% 14%, rgba(255, 120, 175, 0.2), transparent 44%),
+    radial-gradient(circle at 20% 86%, rgba(78, 228, 255, 0.2), transparent 46%),
+    radial-gradient(circle at 72% 88%, rgba(102, 120, 255, 0.24), transparent 50%),
+    linear-gradient(160deg, #0a1020 0%, #141d35 54%, #1b2550 100%);
+}
+
+body[data-theme="prism"] .icon-rail {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.24), transparent 38%),
+    linear-gradient(180deg, rgba(26, 35, 74, 0.92) 0%, rgba(33, 44, 95, 0.9) 48%, rgba(48, 62, 126, 0.88) 100%);
+}
+
+body[data-theme="prism"] .search-wrap,
+body[data-theme="prism"] .message-input-shell {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.05) 52%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(145deg, rgba(92, 238, 255, 0.16), rgba(129, 120, 255, 0.16), rgba(255, 106, 183, 0.14));
+  box-shadow:
+    0 12px 28px rgba(6, 10, 24, 0.28),
+    inset 0 1px 2px rgba(255, 255, 255, 0.28),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(28px) saturate(185%);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+}
+
+body[data-theme="prism"] .primary-btn,
+body[data-theme="prism"] .ghost-btn,
+body[data-theme="prism"] .danger-btn,
+body[data-theme="prism"] .block-btn,
+body[data-theme="prism"] .message-form .send-btn,
+body[data-theme="prism"] .rail-btn,
+body[data-theme="prism"] .head-link-btn,
+body[data-theme="prism"] .dots-btn,
+body[data-theme="prism"] .member-pill {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease, background 0.25s ease;
+  box-shadow:
+    0 10px 26px rgba(255, 120, 200, 0.22),
+    0 0 20px rgba(120, 160, 255, 0.16),
+    inset 0 1px 2px rgba(255, 255, 255, 0.28),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.24);
+}
+
+body[data-theme="prism"] .primary-btn,
+body[data-theme="prism"] .message-form .send-btn {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06) 44%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(135deg, #ff8f5a 0%, #ff5bb3 44%, #6f82ff 100%);
+}
+
+body[data-theme="prism"] .ghost-btn,
+body[data-theme="prism"] .rail-btn,
+body[data-theme="prism"] .head-link-btn,
+body[data-theme="prism"] .dots-btn,
+body[data-theme="prism"] .member-pill {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.05) 44%, rgba(255, 255, 255, 0.02) 70%),
+    linear-gradient(135deg, rgba(90, 236, 255, 0.2) 0%, rgba(96, 126, 255, 0.2) 52%, rgba(195, 111, 255, 0.18) 100%);
+}
+
+body[data-theme="prism"] .danger-btn,
+body[data-theme="prism"] .block-btn {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06) 44%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(135deg, #ff8454 0%, #ff4a91 55%, #d5406c 100%);
+}
+
+body[data-theme="prism"] .primary-btn:hover,
+body[data-theme="prism"] .ghost-btn:hover,
+body[data-theme="prism"] .danger-btn:hover,
+body[data-theme="prism"] .block-btn:hover,
+body[data-theme="prism"] .message-form .send-btn:hover,
+body[data-theme="prism"] .rail-btn:hover,
+body[data-theme="prism"] .head-link-btn:hover,
+body[data-theme="prism"] .dots-btn:hover,
+body[data-theme="prism"] .room-card:hover {
+  transform: scale(1.03);
+  filter: brightness(1.09);
+  box-shadow:
+    0 14px 36px rgba(255, 120, 200, 0.3),
+    0 0 26px rgba(120, 160, 255, 0.24),
+    inset 0 1px 2px rgba(255, 255, 255, 0.34),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.24);
+}
+
+body[data-theme="prism"] .msg {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 18px 18px 18px 10px;
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.05) 48%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(142deg, rgba(130, 173, 255, 0.2), rgba(96, 240, 255, 0.12));
+  box-shadow:
+    0 10px 28px rgba(6, 10, 22, 0.26),
+    0 0 18px rgba(120, 160, 255, 0.18),
+    inset 0 1px 2px rgba(255, 255, 255, 0.28),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(28px) saturate(185%);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+}
+
+body[data-theme="prism"] .msg.own {
+  border-radius: 18px 18px 10px 18px;
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06) 46%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(135deg, rgba(255, 141, 87, 0.74) 0%, rgba(255, 90, 188, 0.72) 46%, rgba(88, 134, 255, 0.74) 100%);
+  box-shadow:
+    0 12px 30px rgba(255, 101, 182, 0.32),
+    0 0 24px rgba(103, 153, 255, 0.24),
+    inset 0 1px 2px rgba(255, 255, 255, 0.34),
+    inset 0 -4px 10px rgba(30, 10, 52, 0.28);
+}
+
+body[data-theme="prism"] .room-unread-dot {
+  background: linear-gradient(145deg, #ff8657 0%, #ff57ae 54%, #6a86ff 100%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.32), 0 0 16px rgba(255, 107, 190, 0.55);
+}
+
+body[data-theme="prism"] .theme-menu-item.active {
+  color: #fff;
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.05) 44%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(135deg, #ff8b5c 0%, #ff5cb6 48%, #7184ff 100%);
+}
+
+body[data-theme="prism"] .room-card .room-text .sidebar-verified-badge,
+body[data-theme="prism"] .room-card.active .room-text .sidebar-verified-badge {
+  color: #35b3ff !important;
+  filter: drop-shadow(0 0 8px rgba(53, 179, 255, 0.42));
+}
+
+body[data-theme="prism"] .message-list {
+  background:
+    radial-gradient(circle at 80% 10%, rgba(255, 132, 191, 0.14), transparent 35%),
+    radial-gradient(circle at 20% 92%, rgba(96, 166, 255, 0.18), transparent 44%);
+}
+
+body[data-theme="prism"] .msg-text-input::placeholder {
+  color: color-mix(in srgb, var(--muted) 78%, #ffffff 22%);
+}
+
+/* Prism/Liquid readability pass for fine details */
+body[data-theme="prism"] .room-text strong,
+body[data-theme="prism"] .chat-title-wrap h3,
+body[data-theme="prism"] .msg-meta strong,
+body[data-theme="liquid"] .room-text strong,
+body[data-theme="liquid"] .chat-title-wrap h3,
+body[data-theme="liquid"] .msg-meta strong {
+  color: var(--text);
+  text-shadow: 0 1px 1px rgba(6, 10, 24, 0.22);
+}
+
+body[data-theme="prism"] .room-text span,
+body[data-theme="prism"] .room-preview-time,
+body[data-theme="prism"] .room-members,
+body[data-theme="prism"] .chat-title-wrap p,
+body[data-theme="prism"] .msg-meta small,
+body[data-theme="prism"] .notification-copy small,
+body[data-theme="prism"] .attach-hint,
+body[data-theme="liquid"] .room-text span,
+body[data-theme="liquid"] .room-preview-time,
+body[data-theme="liquid"] .room-members,
+body[data-theme="liquid"] .chat-title-wrap p,
+body[data-theme="liquid"] .msg-meta small,
+body[data-theme="liquid"] .notification-copy small,
+body[data-theme="liquid"] .attach-hint {
+  color: color-mix(in srgb, var(--muted) 76%, #ffffff 24%);
+  opacity: 1;
+  font-weight: 700;
+}
+
+body[data-theme="prism"] .head-link-btn,
+body[data-theme="prism"] .dots-btn,
+body[data-theme="prism"] .input-icon-btn,
+body[data-theme="prism"] .add-room-btn,
+body[data-theme="prism"] .rail-btn,
+body[data-theme="prism"] .member-pill,
+body[data-theme="liquid"] .head-link-btn,
+body[data-theme="liquid"] .dots-btn,
+body[data-theme="liquid"] .input-icon-btn,
+body[data-theme="liquid"] .add-room-btn,
+body[data-theme="liquid"] .rail-btn,
+body[data-theme="liquid"] .member-pill {
+  color: color-mix(in srgb, var(--text) 88%, #ffffff 12%);
+}
+
+body[data-theme="prism"] .head-link-btn svg,
+body[data-theme="prism"] .dots-btn svg,
+body[data-theme="prism"] .input-icon-btn svg,
+body[data-theme="prism"] .add-room-btn svg,
+body[data-theme="prism"] .rail-btn svg,
+body[data-theme="liquid"] .head-link-btn svg,
+body[data-theme="liquid"] .dots-btn svg,
+body[data-theme="liquid"] .input-icon-btn svg,
+body[data-theme="liquid"] .add-room-btn svg,
+body[data-theme="liquid"] .rail-btn svg {
+  stroke: currentColor;
+  filter: drop-shadow(0 1px 1px rgba(7, 10, 20, 0.28));
+}
+
+body[data-theme="prism"] .msg p,
+body[data-theme="liquid"] .msg p {
+  line-height: 1.38;
+}
+
+body[data-theme="prism"] .msg-meta .verified-badge,
+body[data-theme="liquid"] .msg-meta .verified-badge {
+  width: 13px;
+  height: 13px;
+}
+
+body[data-theme="prism"] .msg-meta .verified-badge svg,
+body[data-theme="liquid"] .msg-meta .verified-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
+body[data-theme="prism"] .msg-text-input::placeholder,
+body[data-theme="liquid"] .msg-text-input::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, #ffffff 28%);
+  opacity: 1;
+}
+
+body[data-theme="prism"] .notification-copy p,
+body[data-theme="liquid"] .notification-copy p {
+  color: color-mix(in srgb, var(--text) 92%, #ffffff 8%);
+}
+
+body[data-theme="prism"] .room-preview-time,
+body[data-theme="liquid"] .room-preview-time {
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1180px) {
+  body[data-theme="prism"] .chat-shell {
+    gap: 10px;
+    padding: 10px;
+  }
+}
+
 body[data-theme="cobalt"] {
   --bg-base: #eef3ff;
   --bg-secondary: #d7e3ff;
@@ -784,6 +1359,38 @@ body[data-theme="liquid"] {
   --offline: #8a97b0;
 }
 
+body[data-theme="prism"] {
+  --bg-base: #090e1b;
+  --bg-secondary: #111938;
+  --bg-accent: #1d2761;
+  --panel: rgba(255, 255, 255, 0.11);
+  --panel-strong: rgba(255, 255, 255, 0.18);
+  --emoji-picker-bg-rgb: 24, 33, 68;
+  --panel-border: rgba(255, 255, 255, 0.22);
+  --text: #eff3ff;
+  --muted: #b2bedf;
+  --primary: #ff5cb6;
+  --primary-strong: #ff3f9f;
+  --accent: #57dbff;
+  --danger: #ff5e7b;
+  --chip: rgba(255, 255, 255, 0.16);
+  --primary-rgb: 255, 92, 182;
+  --accent-rgb: 87, 219, 255;
+  --bg-glow: rgba(255, 92, 182, 0.2);
+  --blob-primary: rgba(255, 92, 182, 0.14);
+  --blob-accent: rgba(87, 219, 255, 0.16);
+  --rail-start: #1a2252;
+  --rail-mid: #273475;
+  --rail-end: #3044a0;
+  --msg-own-start: #ff8756;
+  --msg-own-end: #6284ff;
+  --msg-shadow-rgb: 120, 162, 255;
+  --msg-own-shadow-rgb: 255, 92, 182;
+  --msg-own-shadow-alpha: 0.34;
+  --ok: #31df8d;
+  --offline: #7e8fb9;
+}
+
 body[data-theme="liquid"] body,
 body[data-theme="liquid"] .chat-shell {
   background:
@@ -791,6 +1398,16 @@ body[data-theme="liquid"] .chat-shell {
     radial-gradient(circle at 80% 20%, rgba(255, 200, 150, 0.25), transparent 45%),
     radial-gradient(circle at 20% 80%, rgba(120, 160, 255, 0.28), transparent 50%),
     linear-gradient(165deg, var(--bg-base) 0%, var(--bg-secondary) 50%, var(--bg-accent) 100%);
+}
+
+body[data-theme="prism"] body,
+body[data-theme="prism"] .chat-shell {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.44), transparent 34%),
+    radial-gradient(circle at 84% 16%, rgba(255, 138, 194, 0.26), transparent 42%),
+    radial-gradient(circle at 20% 84%, rgba(86, 230, 255, 0.24), transparent 46%),
+    radial-gradient(circle at 76% 86%, rgba(116, 132, 255, 0.26), transparent 50%),
+    linear-gradient(160deg, var(--bg-base) 0%, var(--bg-secondary) 52%, var(--bg-accent) 100%);
 }
 
 body[data-theme="obsidian"] body,
@@ -1581,6 +2198,16 @@ body[data-theme="starfield"] .notification-card.unread {
   --preview-bubble-right: linear-gradient(135deg, #f06b2f, #f2a53b);
   --preview-text: #1a1f2f;
   --preview-text-strong: #fff;
+}
+
+.theme-card[data-theme="prism"] {
+  --preview-bg: linear-gradient(160deg, #0d1430, #1a2462);
+  --preview-border: rgba(255, 255, 255, 0.28);
+  --preview-accent: linear-gradient(135deg, rgba(255, 137, 192, 0.74), rgba(87, 219, 255, 0.7));
+  --preview-bubble-left: rgba(22, 31, 68, 0.82);
+  --preview-bubble-right: linear-gradient(135deg, #ff8c59, #ff5bb6, #6f86ff);
+  --preview-text: #eef3ff;
+  --preview-text-strong: #ffffff;
 }
 
 .theme-card[data-theme="grove"] {

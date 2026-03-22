@@ -126,14 +126,6 @@ export default function RoomProfilePage() {
           >
             {actionLabel}
           </button>
-          <button
-            type="button"
-            className="ghost-btn"
-            disabled={!room.isMember}
-            onClick={() => navigate(`/room/${room.id}/voice`)}
-          >
-            Join Voice Room
-          </button>
         </div>
       </section>
     </main>

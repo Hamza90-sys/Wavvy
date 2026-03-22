@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import CreateChatRoomForm from "./CreateChatRoomForm";
 
 export default function CreateRoomModal({ open, onClose, onCreate }) {
-  const [form, setForm] = useState({ name: "", description: "", isPrivate: false, roomType: "normal" });
+  const [form, setForm] = useState({ name: "", description: "", isPrivate: false });
   const [loading, setLoading] = useState(false);
   if (!open) return null;
 
@@ -13,7 +13,7 @@ export default function CreateRoomModal({ open, onClose, onCreate }) {
     setLoading(true);
     try {
       await onCreate(form);
-      setForm({ name: "", description: "", isPrivate: false, roomType: "normal" });
+      setForm({ name: "", description: "", isPrivate: false });
       onClose();
     } finally {
       setLoading(false);

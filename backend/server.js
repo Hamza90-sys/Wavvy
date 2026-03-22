@@ -289,13 +289,7 @@ io.on("connection", (socket) => {
     const isMember = room.members.some((memberId) => memberId.toString() === socket.user.id);
     if (!isMember) return;
 
-    if (socket.currentRoom && socket.currentRoom !== roomId) {
-      socket.leave(socket.currentRoom);
-      await emitRoomUsers(socket.currentRoom);
-    }
-
     socket.join(roomId);
-    socket.currentRoom = roomId;
     await emitRoomUsers(roomId);
   });
 

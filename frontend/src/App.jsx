@@ -4,7 +4,6 @@ import AuthPage from "./components/AuthPage";
 import ChatPage from "./pages/ChatPage";
 import RoomProfilePage from "./pages/RoomProfilePage";
 import UserProfilePage from "./pages/UserProfilePage";
-import VoiceRoomPage from "./pages/VoiceRoomPage";
 import { useAuth } from "./context/AuthContext";
 
 function ProtectedRoute({ children }) {
@@ -49,14 +48,6 @@ export default function App() {
         element={
           <ProtectedRoute>
             <RoomProfilePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/room/:id/voice"
-        element={
-          <ProtectedRoute>
-            <VoiceRoomPage />
           </ProtectedRoute>
         }
       />

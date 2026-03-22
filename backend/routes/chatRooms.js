@@ -5,9 +5,10 @@ const multer = require("multer");
 const ChatRoom = require("../models/ChatRoom");
 const Message = require("../models/Message");
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const RoomJoinRequest = require("../models/RoomJoinRequest");
 const auth = require("../middleware/auth");
-const { createNotification } = require("../utils/notifications");
+const { createNotification, serializeNotification } = require("../utils/notifications");
 
 const router = express.Router();
 const uploadsDir = path.join(__dirname, "..", "uploads", "rooms");
@@ -136,17 +137,16 @@ router.post("/direct/:userId", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { name, description, isPrivate, roomType } = req.body;
+    const { name, description, isPrivate } = req.body;
     if (!name) {
       return res.status(400).json({ message: "Room name is required" });
     }
-    const safeRoomType = roomType === "voice" ? "voice" : "normal";
 
     const room = await ChatRoom.create({
       name,
       description: description || "",
       isPrivate: Boolean(isPrivate),
-      roomType: safeRoomType,
+      roomType: "normal",
       createdBy: req.user.id,
       admins: [req.user.id],
       members: [req.user.id]
@@ -159,6 +159,147 @@ router.post("/", async (req, res) => {
       return res.status(409).json({ message: "Room name already exists" });
     }
     return res.status(500).json({ message: "Failed to create room", error: error.message });
+  }
+});
+
+router.get("/:roomId/invite-candidates", async (req, res) => {
+  try {
+    const query = (req.query.q || "").toString().trim();
+    if (query.length < 2) {
+      return res.json({ users: [] });
+    }
+
+    const room = await ChatRoom.findById(req.params.roomId).select("name createdBy admins members isPrivate roomType");
+    if (!room) {
+      return res.status(404).json({ message: "Room not found" });
+    }
+    if (isDirectRoom(room)) {
+      return res.status(400).json({ message: "Direct chats do not support invitations" });
+    }
+    if (!isRoomAdmin(room, req.user.id)) {
+      return res.status(403).json({ message: "Only room admins can invite users" });
+    }
+
+    const adminUser = await User.findById(req.user.id).select("following blockedUsers");
+    const adminBlockedSet = new Set((adminUser?.blockedUsers || []).map((id) => id.toString()));
+    const adminFollowingSet = new Set((adminUser?.following || []).map((id) => id.toString()));
+    const memberSet = new Set((room.members || []).map((id) => id.toString()));
+    memberSet.add(req.user.id);
+    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+
+    const candidates = await User.find({
+      _id: { $nin: Array.from(memberSet) },
+      blockedUsers: { $ne: req.user.id },
+      $or: [{ username: regex }, { displayName: regex }]
+    })
+      .select("username displayName avatarUrl avatarColor following blockedUsers")
+      .limit(20);
+
+    const users = candidates
+      .filter((candidate) => {
+        const candidateId = candidate._id.toString();
+        if (adminBlockedSet.has(candidateId)) return false;
+        const candidateBlockedSet = new Set((candidate.blockedUsers || []).map((id) => id.toString()));
+        if (candidateBlockedSet.has(req.user.id)) return false;
+
+        const candidateFollowingSet = new Set((candidate.following || []).map((id) => id.toString()));
+        const candidateFollowsAdmin = candidateFollowingSet.has(req.user.id);
+        const mutual = candidateFollowsAdmin && adminFollowingSet.has(candidateId);
+        return mutual || candidateFollowsAdmin;
+      })
+      .map((candidate) => ({
+        id: candidate._id.toString(),
+        username: candidate.username,
+        displayName: candidate.displayName || candidate.username,
+        avatarUrl: candidate.avatarUrl || "",
+        avatarColor: candidate.avatarColor || ""
+      }));
+
+    return res.json({ users });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to search invite candidates", error: error.message });
+  }
+});
+
+router.post("/:roomId/invite/:userId", async (req, res) => {
+  try {
+    const room = await ChatRoom.findById(req.params.roomId).select("name createdBy admins members isPrivate roomType");
+    if (!room) {
+      return res.status(404).json({ message: "Room not found" });
+    }
+    if (isDirectRoom(room)) {
+      return res.status(400).json({ message: "Direct chats do not support invitations" });
+    }
+    if (!isRoomAdmin(room, req.user.id)) {
+      return res.status(403).json({ message: "Only room admins can invite users" });
+    }
+
+    const targetId = req.params.userId;
+    if (!targetId || targetId === req.user.id) {
+      return res.status(400).json({ message: "Invalid user" });
+    }
+    if ((room.members || []).some((memberId) => memberId.toString() === targetId)) {
+      return res.status(409).json({ message: "User is already in this room" });
+    }
+
+    const [adminUser, targetUser] = await Promise.all([
+      User.findById(req.user.id).select("username displayName following blockedUsers"),
+      User.findById(targetId).select("username displayName following blockedUsers")
+    ]);
+
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const adminBlockedSet = new Set((adminUser?.blockedUsers || []).map((id) => id.toString()));
+    const targetBlockedSet = new Set((targetUser?.blockedUsers || []).map((id) => id.toString()));
+    if (adminBlockedSet.has(targetId) || targetBlockedSet.has(req.user.id)) {
+      return res.status(403).json({ message: "You cannot invite this user" });
+    }
+
+    const adminFollowingSet = new Set((adminUser?.following || []).map((id) => id.toString()));
+    const targetFollowingSet = new Set((targetUser?.following || []).map((id) => id.toString()));
+    const targetFollowsAdmin = targetFollowingSet.has(req.user.id);
+    const mutual = targetFollowsAdmin && adminFollowingSet.has(targetId);
+    const allowedByRule = mutual || targetFollowsAdmin;
+    if (!allowedByRule) {
+      return res.status(403).json({ message: "Invite requires this user to follow the admin" });
+    }
+
+    const existingInvite = await Notification.findOne({
+      type: "ROOM_INVITE",
+      senderId: req.user.id,
+      receiverId: targetId,
+      roomId: room._id,
+      isRead: false
+    })
+      .populate("senderId", "username displayName avatarUrl avatarColor")
+      .populate("roomId", "name");
+    if (existingInvite) {
+      const payload = serializeNotification(existingInvite);
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`user:${payload.receiverId}`).emit("notification:new", payload);
+      }
+      return res.json({ ok: true, alreadyInvited: true, notification: payload });
+    }
+
+    const io = req.app.get("io");
+    const senderName = adminUser?.displayName || adminUser?.username || "Someone";
+    await createNotification(
+      {
+        type: "ROOM_INVITE",
+        senderId: req.user.id,
+        receiverId: targetId,
+        roomId: room._id,
+        message: `${senderName} invited you to join ${room.name}`
+      },
+      io
+    );
+
+    return res.json({ ok: true, invited: true });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to send invitation", error: error.message });
   }
 });
 

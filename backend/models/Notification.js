@@ -10,7 +10,8 @@ const notificationSchema = new mongoose.Schema(
         "FOLLOW_ACCEPTED",
         "JOIN_ROOM_REQUEST",
         "JOIN_ROOM_ACCEPTED",
-        "NEW_FOLLOWER"
+        "NEW_FOLLOWER",
+        "ROOM_INVITE"
       ]
     },
     senderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },

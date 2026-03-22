@@ -32,7 +32,7 @@ const getDirectNickname = (currentUserId, otherUserId) => {
 const isImage = (mimeType = "") => mimeType.startsWith("image/");
 const isAudio = (mimeType = "") => mimeType.startsWith("audio/");
 const VOICE_WAVE_BARS = 24;
-const roomTypeLabel = (roomType) => (roomType === "voice" ? "Voice chat" : "");
+const roomTypeLabel = (_roomType) => "";
 const formatAudioTime = (value = 0) => {
   const safe = Math.max(0, Math.floor(Number(value) || 0));
   const mm = Math.floor(safe / 60);
@@ -92,6 +92,14 @@ export default function ChatInterface({
     prevMessageCountRef.current = 0;
     const el = messageListRef.current;
     if (el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+  }, [activeRoom?._id]);
+
+  useEffect(() => {
+    // Editing state is room-scoped; clear it when switching conversations.
+    setEditingMessage(null);
+    setDraftInjection(null);
+    setActiveMenuId(null);
+    setActiveReactionPickerId(null);
   }, [activeRoom?._id]);
 
   useEffect(() => {
@@ -252,7 +260,7 @@ export default function ChatInterface({
   const initials = displayName?.slice(0, 2).toUpperCase() || "RM";
   const memberCount = activeRoom?.members?.length || roomUsers.length || 0;
   const roomAvatarUrl = toAttachmentUrl(isDirectChat ? otherMember?.avatarUrl : activeRoom?.avatarUrl);
-  const isVoiceRoom = activeRoom?.roomType === "voice";
+  const isVoiceRoom = false;
 
   const voiceMembers = useMemo(() => {
     const base = roomUsers?.length

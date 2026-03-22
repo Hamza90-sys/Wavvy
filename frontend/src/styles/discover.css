@@ -637,6 +637,10 @@ body[data-theme="starfield"] .discover-chip-label {
     radial-gradient(140% 120% at 50% 90%, var(--bg-glow, rgba(var(--primary-rgb), 0.12)), transparent),
     linear-gradient(160deg, var(--bg-base) 0%, var(--bg-secondary) 45%, var(--bg-accent) 100%);
   box-shadow: 0 18px 48px rgba(var(--primary-rgb), 0.18);
+  min-height: 0;
+  max-height: calc(100dvh - 20px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .settings-head { text-align: center; display: grid; gap: 6px; }
@@ -932,11 +936,11 @@ body[data-theme="starfield"] .discover-chip-label {
   border: 1px solid var(--panel-border);
   background: var(--panel);
   border-radius: 16px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   box-shadow: 0 12px 26px rgba(var(--primary-rgb), 0.12);
 }
 
@@ -948,8 +952,8 @@ body[data-theme="starfield"] .discover-chip-label {
 }
 
 .connections-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   overflow: hidden;
   border: 1px solid rgba(var(--primary-rgb), 0.3);
@@ -983,7 +987,7 @@ body[data-theme="starfield"] .discover-chip-label {
 .connections-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 

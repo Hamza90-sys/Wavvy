@@ -26,7 +26,7 @@ const formatRelativeTime = (value) => {
 };
 
 const canAct = (item) =>
-  item.type === "FOLLOW_REQUEST" || item.type === "JOIN_ROOM_REQUEST";
+  item.type === "FOLLOW_REQUEST" || item.type === "JOIN_ROOM_REQUEST" || item.type === "ROOM_INVITE";
 
 export default function NotificationsPanel({
   notifications = [],
@@ -68,13 +68,20 @@ export default function NotificationsPanel({
                     </strong>
                     <p>{item.message}</p>
                     <small>{formatRelativeTime(item.createdAt)}</small>
-                    {canAct(item) ? (
+                    {canAct(item) && !item.actionState ? (
                       <div className="notification-actions compact">
                         <button type="button" className="primary-btn" onClick={() => onAccept(item.id)}>
                           Accept
                         </button>
                         <button type="button" className="ghost-btn" onClick={() => onDecline(item.id)}>
                           Decline
+                        </button>
+                      </div>
+                    ) : null}
+                    {item.type === "ROOM_INVITE" && item.actionState === "accepted" ? (
+                      <div className="notification-actions compact">
+                        <button type="button" className="primary-btn" disabled>
+                          Joined successfully
                         </button>
                       </div>
                     ) : null}

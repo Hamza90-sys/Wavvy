@@ -64,8 +64,8 @@ const canViewerSeeUser = (user, viewerId) => {
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const serializeUser = (user, viewerId) => {
-  const canSee = canViewerSeeUser(user, viewerId);
+const serializeUser = (user, viewerId, options = {}) => {
+  const canSee = options.forceVisible ? true : canViewerSeeUser(user, viewerId);
   return {
     id: user._id,
     username: user.username,
@@ -359,7 +359,10 @@ router.delete("/blocked/:userId", async (req, res) => {
 router.get("/followers", async (req, res) => {
   try {
     const user = await User.findById(req.user.id).populate("followers", "username displayName avatarUrl avatarColor preferences followers following blockedUsers");
-    const followers = (user.followers || []).filter((entry) => canViewerSeeUser(entry, req.user.id)).map((entry) => serializeUser(entry, req.user.id));
+    if (!user) {
+      return res.json({ followers: [] });
+    }
+    const followers = (user.followers || []).map((entry) => serializeUser(entry, req.user.id, { forceVisible: true }));
     return res.json({ followers });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load followers", error: error.message });
@@ -369,7 +372,10 @@ router.get("/followers", async (req, res) => {
 router.get("/following", async (req, res) => {
   try {
     const user = await User.findById(req.user.id).populate("following", "username displayName avatarUrl avatarColor preferences followers following blockedUsers");
-    const following = (user.following || []).filter((entry) => canViewerSeeUser(entry, req.user.id)).map((entry) => serializeUser(entry, req.user.id));
+    if (!user) {
+      return res.json({ following: [] });
+    }
+    const following = (user.following || []).map((entry) => serializeUser(entry, req.user.id, { forceVisible: true }));
     return res.json({ following });
   } catch (error) {
     return res.status(500).json({ message: "Failed to load following", error: error.message });

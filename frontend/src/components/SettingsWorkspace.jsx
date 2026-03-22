@@ -155,13 +155,25 @@ export default function SettingsWorkspace({
     [following]
   );
   const filteredConnections = useMemo(() => {
-    const query = connectionsQuery.trim().toLowerCase();
+    const query = connectionsQuery.trim().toLowerCase().replace(/^@/, "");
     if (!query) return connectionsList;
     return connectionsList.filter((connection) => {
-      const label = `${connection.displayName || ""} ${connection.username || ""}`.toLowerCase();
+      const label = `${connection.displayName || ""} ${connection.username || ""} ${connection.id || connection._id || ""}`
+        .toLowerCase()
+        .replace(/^@/, "");
       return label.includes(query);
     });
   }, [connectionsList, connectionsQuery]);
+  const myCreatedRooms = useMemo(() => {
+    const currentUserId = user?.id || user?._id;
+    if (!currentUserId) return [];
+    return (myRoomsData || []).filter((room) => {
+      const creatorId = room?.createdBy?._id || room?.createdBy?.id || room?.createdBy;
+      const memberCount = room?.members?.length || 0;
+      const isDirectChat = (Boolean(room?.isPrivate) && memberCount === 2) || (room?.name || "").toLowerCase().startsWith("dm-");
+      return String(creatorId || "") === String(currentUserId) && !isDirectChat;
+    });
+  }, [myRoomsData, user?.id, user?._id]);
 
   useEffect(() => {
     const onPointerDown = (event) => {
@@ -403,9 +415,9 @@ export default function SettingsWorkspace({
 
   if (view === "myRooms") {
     return (
-      <DetailShell title="My Rooms" subtitle="Rooms you can jump back into." onBack={() => setView("index")}>
+      <DetailShell title="My Rooms" subtitle="Rooms you created." onBack={() => setView("index")}>
         <div className="settings-list-block">
-          {myRoomsData.length ? myRoomsData.map((room) => (
+          {myCreatedRooms.length ? myCreatedRooms.map((room) => (
             <button
               key={room._id}
               type="button"
@@ -421,7 +433,7 @@ export default function SettingsWorkspace({
               </span>
               <span className="settings-trailing">{room.members?.length || 0} members</span>
             </button>
-          )) : <p className="muted">No rooms yet.</p>}
+          )) : <p className="muted">No created rooms yet.</p>}
         </div>
       </DetailShell>
     );

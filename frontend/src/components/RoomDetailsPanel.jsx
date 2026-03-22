@@ -10,7 +10,7 @@ const toAttachmentUrl = (url) => {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return `${API_BASE}${url}`;
 };
-const roomTypeLabel = (roomType) => (roomType === "voice" ? "Voice chat" : "");
+const roomTypeLabel = (_roomType) => "";
 
 export default function RoomDetailsPanel({
   activeRoom,

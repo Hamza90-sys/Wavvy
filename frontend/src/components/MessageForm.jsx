@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEdit, draftInjection, onTypingStart = () => {}, onTypingStop = () => {} }) {
   const [text, setText] = useState("");
   const [draftText, setDraftText] = useState("");
+  const latestTextRef = useRef("");
   const prevEditingIdRef = useRef(null);
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
@@ -261,6 +262,10 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
   }, [onTypingStart, onTypingStop]);
 
   useEffect(() => {
+    latestTextRef.current = text;
+  }, [text]);
+
+  useEffect(() => {
     onTypingStopRef.current = onTypingStop;
   }, [onTypingStop]);
 
@@ -313,24 +318,22 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
   useEffect(() => {
     if (editingMessage) {
       if (prevEditingIdRef.current !== editingMessage.id) {
-        if (!prevEditingIdRef.current) setDraftText(text);
+        if (!prevEditingIdRef.current) setDraftText(latestTextRef.current);
         setText(editingMessage.content || "");
         prevEditingIdRef.current = editingMessage.id;
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+            const len = (editingMessage.content || "").length;
+            inputRef.current.setSelectionRange(len, len);
+          }
+        }, 0);
       }
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-          const len = (editingMessage.content || "").length;
-          inputRef.current.setSelectionRange(len, len);
-        }
-      }, 0);
-    } else {
-      if (prevEditingIdRef.current) {
-        setText(draftText);
-        prevEditingIdRef.current = null;
-      }
+    } else if (prevEditingIdRef.current) {
+      setText(draftText);
+      prevEditingIdRef.current = null;
     }
-  }, [editingMessage, text, draftText]);
+  }, [editingMessage, draftText]);
 
   useEffect(() => {
     return () => {
@@ -403,17 +406,19 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
   };
 
   const onEmojiSelect = (emoji) => {
-    const nativeEmoji = emoji?.native || "";
+    const nativeEmoji = emoji?.native || emoji?.skins?.[0]?.native || emoji?.colons || "";
     if (!nativeEmoji) return;
     const input = inputRef.current;
     if (!input) {
       setText((prev) => `${prev}${nativeEmoji}`);
+      setEmojiOpen(false);
       return;
     }
     const start = input.selectionStart ?? text.length;
     const end = input.selectionEnd ?? text.length;
     const nextText = `${text.slice(0, start)}${nativeEmoji}${text.slice(end)}`;
     setText(nextText);
+    setEmojiOpen(false);
     window.requestAnimationFrame(() => {
       const cursor = start + nativeEmoji.length;
       input.focus();
@@ -528,6 +533,7 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
             <input
               ref={inputRef}
               type="text"
+              dir="ltr"
               placeholder="Type a message..."
               value={text}
               onChange={(event) => {
