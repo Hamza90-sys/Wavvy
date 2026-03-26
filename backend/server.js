@@ -32,6 +32,7 @@ const app = express();
 const server = http.createServer(app);
 const userSockets = new Map();
 const voiceRooms = new Map();
+const activeRoomCalls = new Map();
 const socketEventState = new Map();
 
 // allow the frontend origin(s) to be configured via env var
@@ -117,6 +118,14 @@ const serializeMessage = (messageDoc) => ({
         avatarColor: messageDoc.user.avatarColor,
         avatarUrl: messageDoc.user.avatarUrl,
         status: messageDoc.user.status
+      }
+    : null,
+  replyTo: messageDoc.replyTo
+    ? {
+        messageId: messageDoc.replyTo.messageId?.toString?.() || messageDoc.replyTo.messageId,
+        userId: messageDoc.replyTo.userId?.toString?.() || messageDoc.replyTo.userId,
+        username: messageDoc.replyTo.username,
+        snippet: messageDoc.replyTo.snippet
       }
     : null,
   createdAt: messageDoc.createdAt
@@ -280,6 +289,44 @@ io.on("connection", (socket) => {
       .catch(() => undefined);
   }
 
+  const emitRoomCallStatusToSocket = (targetSocket, roomId) => {
+    const activeCall = activeRoomCalls.get(roomId);
+    targetSocket.emit("room:call-status", {
+      roomId,
+      active: Boolean(activeCall),
+      callType: activeCall?.callType || null,
+      participantCount: activeCall?.participants?.size || 0
+    });
+  };
+  const emitRoomCallStatus = (roomId) => {
+    const activeCall = activeRoomCalls.get(roomId);
+    io.to(roomId).emit("room:call-status", {
+      roomId,
+      active: Boolean(activeCall),
+      callType: activeCall?.callType || null,
+      participantCount: activeCall?.participants?.size || 0
+    });
+  };
+  const upsertActiveRoomCall = (roomId, callType, participantIds = []) => {
+    if (!roomId) return;
+    const existing = activeRoomCalls.get(roomId);
+    const participants = existing?.participants || new Set();
+    participantIds.forEach((id) => {
+      if (id) participants.add(id);
+    });
+    activeRoomCalls.set(roomId, {
+      callType: callType || existing?.callType || "audio",
+      participants
+    });
+    emitRoomCallStatus(roomId);
+  };
+  const clearActiveRoomCall = (roomId) => {
+    if (!roomId) return;
+    if (!activeRoomCalls.has(roomId)) return;
+    activeRoomCalls.delete(roomId);
+    emitRoomCallStatus(roomId);
+  };
+
   socket.on("joinRoom", async ({ roomId }) => {
     if (!allowSocketEvent(socket, "joinRoom", 30, 10_000)) return;
     if (!roomId) return;
@@ -291,6 +338,7 @@ io.on("connection", (socket) => {
 
     socket.join(roomId);
     await emitRoomUsers(roomId);
+    emitRoomCallStatusToSocket(socket, roomId);
   });
 
   socket.on("leaveRoom", async ({ roomId }) => {
@@ -309,52 +357,82 @@ io.on("connection", (socket) => {
     await emitRoomUsers(roomId);
   });
 
-  socket.on("sendMessage", async ({ roomId, content, attachments = [] }) => {
-    if (!allowSocketEvent(socket, "sendMessage", 20, 10_000)) return;
-    const text = (content || "").trim();
-    const safeAttachments = Array.isArray(attachments) ? attachments : [];
-    if (!roomId || (!text && !safeAttachments.length)) return;
+  socket.on("sendMessage", async ({ roomId, content, attachments = [], replyTo = null }) => {
+    try {
+      if (!allowSocketEvent(socket, "sendMessage", 20, 10_000)) return;
+      const text = (content || "").trim();
+      const safeAttachments = Array.isArray(attachments) ? attachments : [];
+      if (!roomId || (!text && !safeAttachments.length)) return;
 
-    const room = await ChatRoom.findById(roomId);
-    if (!room) return;
+      const room = await ChatRoom.findById(roomId);
+      if (!room) return;
 
-    const isMember = room.members.some((memberId) => memberId.toString() === socket.user.id);
-    if (!isMember) return;
+      const isMember = room.members.some((memberId) => memberId.toString() === socket.user.id);
+      if (!isMember) return;
 
-    const blockedBy = await User.findOne({ _id: { $in: room.members }, blockedUsers: socket.user.id }).select("_id");
-    if (blockedBy) {
-      return;
+      const blockedBy = await User.findOne({ _id: { $in: room.members }, blockedUsers: socket.user.id }).select("_id");
+      if (blockedBy) {
+        return;
+      }
+
+      let safeReplyTo = null;
+      const replyMessageId = replyTo?.messageId;
+      if (replyMessageId && mongoose.Types.ObjectId.isValid(replyMessageId)) {
+        const repliedMessage = await Message.findOne({
+          _id: replyMessageId,
+          room: roomId
+        }).select("_id user content attachments");
+
+        if (repliedMessage) {
+          const repliedUser = await User.findById(repliedMessage.user).select("username");
+          const fallbackSnippet = repliedMessage.content
+            || repliedMessage.attachments?.[0]?.fileName
+            || "Attachment";
+          const replyUsername = (replyTo.username || repliedUser?.username || "Unknown").toString().trim().slice(0, 80);
+          const replySnippet = (replyTo.snippet || fallbackSnippet || "").toString().trim().slice(0, 220);
+
+          safeReplyTo = {
+            messageId: repliedMessage._id,
+            userId: repliedMessage.user,
+            username: replyUsername || "Unknown",
+            snippet: replySnippet || "Attachment"
+          };
+        }
+      }
+
+      const message = await Message.create({
+        room: roomId,
+        user: socket.user.id,
+        content: text,
+        replyTo: safeReplyTo,
+        attachments: safeAttachments
+          .filter((item) => item?.url && item?.fileName && item?.mimeType)
+          .slice(0, 5)
+          .map((item) => ({
+            url: item.url,
+            fileName: item.fileName,
+            mimeType: item.mimeType,
+            size: item.size,
+            duration: Number.isFinite(Number(item.duration)) ? Number(item.duration) : undefined,
+            transcript: typeof item.transcript === "string" ? item.transcript.trim() : "",
+            transcriptLanguage: typeof item.transcriptLanguage === "string" ? item.transcriptLanguage.trim() : "",
+            transcriptGeneratedAt: item.transcript ? new Date() : null
+          }))
+      });
+
+      const populatedMessage = await message.populate([
+        { path: "user", select: "username displayName avatarColor avatarUrl status" },
+        { path: "reactions.users", select: "username" }
+      ]);
+
+      socket.to(roomId).emit("typing:stop", {
+        roomId,
+        userId: socket.user.id
+      });
+      io.to(roomId).emit("newMessage", serializeMessage(populatedMessage));
+    } catch (error) {
+      console.error("[socket] sendMessage failed:", error?.message || error);
     }
-
-    const message = await Message.create({
-      room: roomId,
-      user: socket.user.id,
-      content: text,
-      attachments: safeAttachments
-        .filter((item) => item?.url && item?.fileName && item?.mimeType)
-        .slice(0, 5)
-        .map((item) => ({
-          url: item.url,
-          fileName: item.fileName,
-          mimeType: item.mimeType,
-          size: item.size,
-          duration: Number.isFinite(Number(item.duration)) ? Number(item.duration) : undefined,
-          transcript: typeof item.transcript === "string" ? item.transcript.trim() : "",
-          transcriptLanguage: typeof item.transcriptLanguage === "string" ? item.transcriptLanguage.trim() : "",
-          transcriptGeneratedAt: item.transcript ? new Date() : null
-        }))
-    });
-
-    const populatedMessage = await message.populate([
-      { path: "user", select: "username displayName avatarColor avatarUrl status" },
-      { path: "reactions.users", select: "username" }
-    ]);
-
-    socket.to(roomId).emit("typing:stop", {
-      roomId,
-      userId: socket.user.id
-    });
-    io.to(roomId).emit("newMessage", serializeMessage(populatedMessage));
   });
 
   socket.on("typing:start", async ({ roomId }) => {
@@ -594,6 +672,8 @@ io.on("connection", (socket) => {
         }
       });
     });
+    socket.activeCallRoomId = roomId;
+    upsertActiveRoomCall(roomId, callType, [socket.user.id]);
   });
 
   socket.on("call:accept", ({ roomId, targetUserId, callType }) => {
@@ -608,6 +688,8 @@ io.on("connection", (socket) => {
         fromUserId: socket.user.id
       });
     });
+    socket.activeCallRoomId = roomId;
+    upsertActiveRoomCall(roomId, callType, [socket.user.id, targetUserId]);
   });
 
   socket.on("call:reject", ({ roomId, targetUserId }) => {
@@ -677,6 +759,8 @@ io.on("connection", (socket) => {
         fromUserId: socket.user.id
       });
     });
+    clearActiveRoomCall(roomId);
+    socket.activeCallRoomId = null;
   });
 
   socket.on("voice:join", async ({ roomId }) => {
@@ -798,6 +882,20 @@ io.on("connection", (socket) => {
     if (isNowOffline) {
       const presenceDoc = await setPresenceState(socket.user.id, "offline");
       await emitPresenceForUser(socket.user.id, presenceDoc);
+    }
+
+    if (socket.activeCallRoomId) {
+      const activeCall = activeRoomCalls.get(socket.activeCallRoomId);
+      if (activeCall) {
+        activeCall.participants.delete(socket.user.id);
+        if (activeCall.participants.size === 0) {
+          activeRoomCalls.delete(socket.activeCallRoomId);
+        } else {
+          activeRoomCalls.set(socket.activeCallRoomId, activeCall);
+        }
+        emitRoomCallStatus(socket.activeCallRoomId);
+      }
+      socket.activeCallRoomId = null;
     }
 
     for (const key of socketEventState.keys()) {

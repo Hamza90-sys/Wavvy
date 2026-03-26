@@ -66,14 +66,28 @@ export default function ChatInterface({
 }) {
   const [activeReactionPickerId, setActiveReactionPickerId] = useState(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [menuDirectionById, setMenuDirectionById] = useState({});
   const [editingMessage, setEditingMessage] = useState(null);
-  const [draftInjection, setDraftInjection] = useState(null);
+  const [replyTo, setReplyTo] = useState(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState("");
   const [activeAudioId, setActiveAudioId] = useState("");
   const [audioUiById, setAudioUiById] = useState({});
   const [nicknameTick, setNicknameTick] = useState(0);
   const messageListRef = useRef(null);
   const prevMessageCountRef = useRef(0);
+  const messageNodeRefs = useRef({});
+  const replyFlashTimeoutRef = useRef(null);
   const audioRefs = useRef({});
+
+  const normalizeMessageId = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id) return normalizeMessageId(value._id);
+      if (value.id) return normalizeMessageId(value.id);
+    }
+    return String(value);
+  };
 
   useEffect(() => {
     const el = messageListRef.current;
@@ -94,12 +108,20 @@ export default function ChatInterface({
     if (el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
   }, [activeRoom?._id]);
 
+  useEffect(() => () => {
+    if (replyFlashTimeoutRef.current) {
+      clearTimeout(replyFlashTimeoutRef.current);
+      replyFlashTimeoutRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     // Editing state is room-scoped; clear it when switching conversations.
     setEditingMessage(null);
-    setDraftInjection(null);
+    setReplyTo(null);
     setActiveMenuId(null);
     setActiveReactionPickerId(null);
+    setMenuDirectionById({});
   }, [activeRoom?._id]);
 
   useEffect(() => {
@@ -127,6 +149,30 @@ export default function ChatInterface({
       },
     [currentUser]
   );
+
+  const bindMessageNode = (messageId, node) => {
+    if (!messageId) return;
+    if (node) {
+      messageNodeRefs.current[messageId] = node;
+      return;
+    }
+    delete messageNodeRefs.current[messageId];
+  };
+
+  const jumpToRepliedMessage = (targetMessageId) => {
+    const safeId = normalizeMessageId(targetMessageId);
+    if (!safeId) return;
+    const targetNode = messageNodeRefs.current[safeId];
+    if (!targetNode) return;
+
+    targetNode.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedMessageId(safeId);
+    if (replyFlashTimeoutRef.current) clearTimeout(replyFlashTimeoutRef.current);
+    replyFlashTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedMessageId("");
+      replyFlashTimeoutRef.current = null;
+    }, 1200);
+  };
 
   const groupedMessages = useMemo(() => {
     const groups = [];
@@ -321,104 +367,16 @@ export default function ChatInterface({
     url.searchParams.set("callOnly", "1");
     window.open(url.toString(), "_blank", "noopener");
   };
+  const showIncomingOnly = Boolean(callState?.incoming && !callState?.connecting && !callState?.inCall);
 
   const voiceChatContent = (
     <>
       {callState?.incoming ? (
-        <div className="call-banner">
+        <div className={`call-banner${showIncomingOnly ? " compact" : ""}`}>
           <span>{callState.incoming.fromName} is calling ({callState.incoming.callType === "video" ? "video" : "audio"})</span>
           <div className="call-banner-actions">
             <button type="button" className="primary-btn" onClick={callState.onAcceptIncoming}>Accept</button>
             <button type="button" className="danger-btn" onClick={callState.onRejectIncoming}>Reject</button>
-          </div>
-        </div>
-      ) : null}
-
-      {callState?.inCall || callState?.connecting ? (
-        <div className="call-panel pro-call">
-          <div className="call-header-row">
-            <div className="call-meta">
-              <span className={callState.connecting ? "call-chip waiting" : "call-chip live"}>
-                {callState.connecting ? (callState.awaitingPeer ? "Waiting" : "Connecting") : "Live"}
-              </span>
-              <span className="call-type">{callState.callType === "video" ? "Video call" : "Voice call"}</span>
-              <span className="call-room-name">{activeRoom?.name}</span>
-            </div>
-            <div className="call-presence">
-              <span className="pulse-dot" aria-hidden="true" />
-              {callState.connecting ? (callState.awaitingPeer ? "Waiting for participant" : "Preparing media") : "Connected"}
-            </div>
-          </div>
-
-          {callState.callType === "video" ? (
-            <div className="call-stage">
-              <div className="video-frame remote-frame">
-                <video ref={remoteVideoRef} autoPlay playsInline className="call-video remote" />
-                <div className="video-label">Remote</div>
-              </div>
-              <div className="video-frame local-frame">
-                <video ref={localVideoRef} autoPlay playsInline muted className="call-video local" />
-                <div className="video-label">{callControls?.cameraOff ? "Camera off" : "You"}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="call-audio-card">
-              <div className="audio-visualizer" aria-hidden="true">
-                <span /><span /><span /><span /><span />
-              </div>
-              <div className="audio-text">Voice channel active - crystal clear</div>
-              <audio ref={remoteVideoRef} autoPlay style={{ display: "none" }} />
-            </div>
-          )}
-
-          <div className="call-controls">
-            <button
-              type="button"
-              className={callControls?.micMuted ? "call-ctl-btn muted" : "call-ctl-btn"}
-              onClick={onToggleMic}
-              aria-label={callControls?.micMuted ? "Unmute microphone" : "Mute microphone"}
-              title={callControls?.micMuted ? "Unmute" : "Mute"}
-            >
-              {callControls?.micMuted ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12" /><line x1="17" y1="9" x2="17" y2="13" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" /><line x1="2" y1="2" x2="22" y2="22" />
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 3a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" /><path d="M19 11a7 7 0 0 1-14 0" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" />
-                </svg>
-              )}
-              <span>{callControls?.micMuted ? "Unmute" : "Mute"}</span>
-            </button>
-
-            {callState.callType === "video" ? (
-              <button
-                type="button"
-                className={callControls?.cameraOff ? "call-ctl-btn muted" : "call-ctl-btn"}
-                onClick={onToggleCamera}
-                aria-label={callControls?.cameraOff ? "Turn camera on" : "Turn camera off"}
-                title={callControls?.cameraOff ? "Camera on" : "Camera off"}
-              >
-                {callControls?.cameraOff ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M16 16.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3" /><path d="M17 13.5V9a2 2 0 0 0-2-2h-1" /><path d="m22 15-5-5v10z" /><line x1="2" y1="2" x2="22" y2="22" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="5" width="13" height="14" rx="2" ry="2" /><polygon points="16 7 22 5 22 19 16 17 16 7" />
-                  </svg>
-                )}
-                <span>{callControls?.cameraOff ? "Camera off" : "Camera on"}</span>
-              </button>
-            ) : null}
-
-            <button type="button" className="call-ctl-btn end" onClick={onEndCall}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v-3a2 2 0 0 0-2-2h-1.2a17.9 17.9 0 0 0-11.6 0H5a2 2 0 0 0-2 2v3" />
-                <path d="M7 16.5v3" /><path d="M17 16.5v3" />
-              </svg>
-              <span>End</span>
-            </button>
           </div>
         </div>
       ) : null}
@@ -452,9 +410,17 @@ export default function ChatInterface({
                 const isOnline = memberPresence?.presenceStatus === "online" || memberPresence?.online;
                 const audioAttachments = (message.attachments || []).filter((file) => isAudio(file.mimeType));
                 const hasOnlyAudio = !message.content && audioAttachments.length > 0 && audioAttachments.length === (message.attachments || []).length;
+                const replySnippet = (message.replyTo?.snippet || "").trim();
+                const replyUsername = (message.replyTo?.username || "Unknown").trim() || "Unknown";
+                const replyTargetMessageId = normalizeMessageId(message.replyTo?.messageId);
+                const replyLead = isOwnGroup ? "You replied to" : `${messageUserName} replied to`;
 
                 return (
-                  <div key={messageId} className="msg-row">
+                  <div
+                    key={messageId}
+                    className={`msg-row${highlightedMessageId === messageId ? " reply-target-flash" : ""}`}
+                    ref={(node) => bindMessageNode(messageId, node)}
+                  >
                     {!isOwnGroup ? (
                       <div className="msg-avatar-area">
                         {showAvatar ? (
@@ -471,86 +437,104 @@ export default function ChatInterface({
                     <div className="msg-main">
                       <div className={`msg-bubble-row ${isOwnGroup ? "own" : ""}`}>
                         <article className={`msg ${isOwnGroup ? "own" : ""}${hasOnlyAudio ? " voice-only" : ""}`}>
-                          {!hasOnlyAudio ? (
-                            <div className={`msg-meta${showMeta ? "" : " subtle"}`}>
-                              {showMeta ? (
-                                <strong className="name-with-badge">
-                                  {messageUserName}
-                                  {isVerifiedUser(message.user || group.user) ? <VerifiedBadge /> : null}
-                                </strong>
-                              ) : null}
-                              <small>
-                                {formatTime(message.createdAt)}
-                                {message.isEdited ? <span className="msg-edited-tag"> (edited)</span> : null}
-                              </small>
-                            </div>
+                          {message.replyTo ? (
+                            <>
+                              <button
+                                type="button"
+                                className="msg-reply-inline"
+                                onClick={() => jumpToRepliedMessage(replyTargetMessageId)}
+                                title="Jump to replied message"
+                              >
+                                <span className="msg-reply-inline-label">
+                                  {replyLead} <strong>{replyUsername}</strong>
+                                </span>
+                                <span className="msg-reply-inline-preview">{replySnippet || "Attachment"}</span>
+                              </button>
+                            </>
                           ) : null}
 
-                          {message.content ? <p>{message.content}</p> : null}
+                          <div className="msg-content-body">
+                            {!hasOnlyAudio ? (
+                              <div className={`msg-meta${showMeta ? "" : " subtle"}`}>
+                                {showMeta ? (
+                                  <strong className="name-with-badge">
+                                    {messageUserName}
+                                    {isVerifiedUser(message.user || group.user) ? <VerifiedBadge /> : null}
+                                  </strong>
+                                ) : null}
+                                <small>
+                                  {formatTime(message.createdAt)}
+                                  {message.isEdited ? <span className="msg-edited-tag"> (edited)</span> : null}
+                                </small>
+                              </div>
+                            ) : null}
 
-                          {message.attachments?.length ? (
-                            <div className="msg-attachments">
-                              {message.attachments.map((file) => (
-                                isAudio(file.mimeType) ? (
-                                  <div key={`${file.url}-${file.fileName}`} className="voice-message-card">
-                                    {(() => {
-                                      const audioId = buildAudioId(messageId, file);
-                                      return (
-                                        <>
-                                          <audio
-                                            ref={(node) => bindAudioNode(audioId, node)}
-                                            src={toAttachmentUrl(file.url)}
-                                            preload="metadata"
-                                          />
-                                          <div className="voice-message-controls compact">
-                                            <button
-                                              type="button"
-                                              className="voice-play-btn"
-                                              onClick={() => toggleAudioPlayback(audioId)}
-                                              aria-label={audioUiById[audioId]?.playing ? "Pause voice message" : "Play voice message"}
-                                            >
-                                              {audioUiById[audioId]?.playing ? (
-                                                <span className="voice-icon-pause" aria-hidden="true" />
-                                              ) : (
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                                  <path d="M8 5v14l11-7z" />
-                                                </svg>
-                                              )}
-                                            </button>
-                                            <div className="voice-waveform" aria-hidden="true">
-                                              {Array.from({ length: VOICE_WAVE_BARS }).map((_, idx) => {
-                                                const progress = audioUiById[audioId]?.progress || 0;
-                                                const threshold = ((idx + 1) / VOICE_WAVE_BARS) * 100;
-                                                const isActive = progress >= threshold;
-                                                return <span key={`${audioId}-bar-${idx}`} className={isActive ? "wave-bar active" : "wave-bar"} />;
-                                              })}
+                            {message.content ? <p>{message.content}</p> : null}
+
+                            {message.attachments?.length ? (
+                              <div className="msg-attachments">
+                                {message.attachments.map((file) => (
+                                  isAudio(file.mimeType) ? (
+                                    <div key={`${file.url}-${file.fileName}`} className="voice-message-card">
+                                      {(() => {
+                                        const audioId = buildAudioId(messageId, file);
+                                        return (
+                                          <>
+                                            <audio
+                                              ref={(node) => bindAudioNode(audioId, node)}
+                                              src={toAttachmentUrl(file.url)}
+                                              preload="metadata"
+                                            />
+                                            <div className="voice-message-controls compact">
+                                              <button
+                                                type="button"
+                                                className="voice-play-btn"
+                                                onClick={() => toggleAudioPlayback(audioId)}
+                                                aria-label={audioUiById[audioId]?.playing ? "Pause voice message" : "Play voice message"}
+                                              >
+                                                {audioUiById[audioId]?.playing ? (
+                                                  <span className="voice-icon-pause" aria-hidden="true" />
+                                                ) : (
+                                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                    <path d="M8 5v14l11-7z" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                              <div className="voice-waveform" aria-hidden="true">
+                                                {Array.from({ length: VOICE_WAVE_BARS }).map((_, idx) => {
+                                                  const progress = audioUiById[audioId]?.progress || 0;
+                                                  const threshold = ((idx + 1) / VOICE_WAVE_BARS) * 100;
+                                                  const isActive = progress >= threshold;
+                                                  return <span key={`${audioId}-bar-${idx}`} className={isActive ? "wave-bar active" : "wave-bar"} />;
+                                                })}
+                                              </div>
+                                              <span className="voice-duration">
+                                                {formatAudioTime(audioUiById[audioId]?.duration || file.duration || 0)}
+                                              </span>
                                             </div>
-                                            <span className="voice-duration">
-                                              {formatAudioTime(audioUiById[audioId]?.duration || file.duration || 0)}
-                                            </span>
-                                          </div>
-                                          <input
-                                            type="range"
-                                            min="0"
-                                            max="100"
-                                            value={audioUiById[audioId]?.progress || 0}
-                                            onChange={(event) => seekAudio(audioId, event.target.value)}
-                                            className="voice-seek-hidden"
-                                            aria-label="Seek voice message"
-                                          />
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                ) : (
-                                  <a key={`${file.url}-${file.fileName}`} href={toAttachmentUrl(file.url)} target="_blank" rel="noreferrer" className="msg-file-link">
-                                    {isImage(file.mimeType) ? <img src={toAttachmentUrl(file.url)} alt={file.fileName} className="msg-image" /> : null}
-                                    <span>{file.fileName}</span>
-                                  </a>
-                                )
-                              ))}
-                            </div>
-                          ) : null}
+                                            <input
+                                              type="range"
+                                              min="0"
+                                              max="100"
+                                              value={audioUiById[audioId]?.progress || 0}
+                                              onChange={(event) => seekAudio(audioId, event.target.value)}
+                                              className="voice-seek-hidden"
+                                              aria-label="Seek voice message"
+                                            />
+                                          </>
+                                        );
+                                      })()}
+                                    </div>
+                                  ) : (
+                                    <a key={`${file.url}-${file.fileName}`} href={toAttachmentUrl(file.url)} target="_blank" rel="noreferrer" className="msg-file-link">
+                                      {isImage(file.mimeType) ? <img src={toAttachmentUrl(file.url)} alt={file.fileName} className="msg-image" /> : null}
+                                      <span>{file.fileName}</span>
+                                    </a>
+                                  )
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
                         </article>
 
                         <div className="msg-tools">
@@ -599,22 +583,42 @@ export default function ChatInterface({
                             className="msg-tool-btn more-launcher"
                             aria-label="Message actions"
                             title="More"
-                            onClick={() => {
+                            onClick={(event) => {
+                              const triggerRect = event.currentTarget.getBoundingClientRect();
+                              const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+                              const openDown = triggerRect.top < viewportHeight / 2;
+
                               setActiveReactionPickerId(null);
+                              setMenuDirectionById((prev) => ({
+                                ...prev,
+                                [messageId]: openDown ? "down" : "up"
+                              }));
                               setActiveMenuId((prev) => (prev === messageId ? null : messageId));
                             }}
                           >
                             <span aria-hidden="true">...</span>
                           </button>
                           {activeMenuId === messageId ? (
-                            <div className="msg-popover msg-menu" role="menu">
+                            <div
+                              className={`msg-popover msg-menu ${menuDirectionById[messageId] === "down" ? "open-down" : "open-up"}`}
+                              role="menu"
+                            >
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const quoted = message.content?.trim()
-                                    ? `Re: ${message.content}`
-                                    : `Re: ${messageUserName || "message"}`;
-                                  setDraftInjection({ id: Date.now(), text: quoted });
+                                  if (!message?._id) {
+                                    setActiveMenuId(null);
+                                    return;
+                                  }
+                                  const fallbackSnippet = message.content?.trim()
+                                    || message.attachments?.[0]?.fileName
+                                    || "Attachment";
+                                  setReplyTo({
+                                    messageId: message._id,
+                                    userId: message.user?.id || message.user?._id || "",
+                                    username: messageUserName || "Unknown",
+                                    snippet: fallbackSnippet.slice(0, 220)
+                                  });
                                   setActiveMenuId(null);
                                 }}
                               >
@@ -716,7 +720,8 @@ export default function ChatInterface({
         onEdit={onEditMessage}
         editingMessage={editingMessage}
         onCancelEdit={() => setEditingMessage(null)}
-        draftInjection={draftInjection}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
         onTypingStart={onTypingStart}
         onTypingStop={onTypingStop}
       />
@@ -747,14 +752,16 @@ export default function ChatInterface({
         </div>
 
         <div className="chat-head-actions">
-          <span className="member-pill">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="8.5" cy="7" r="4" />
-              <path d="M20 8v6M23 11h-6" />
-            </svg>
-            {memberCount}
-          </span>
+          {!isDirectChat ? (
+            <span className="member-pill">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="8.5" cy="7" r="4" />
+                <path d="M20 8v6M23 11h-6" />
+              </svg>
+              {memberCount}
+            </span>
+          ) : null}
           <button
             type="button"
             className="ghost-btn head-link-btn icon-head-btn"

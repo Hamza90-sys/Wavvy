@@ -1,6 +1,4 @@
 export const THEMES = [
-  { id: "liquid", label: "Liquid Glass" },
-  { id: "prism", label: "Prism Luxe" },
   { id: "grove", label: "Neon Grove" },
   { id: "dark", label: "Dark Matter" },
   { id: "noir", label: "Noir Gold" },

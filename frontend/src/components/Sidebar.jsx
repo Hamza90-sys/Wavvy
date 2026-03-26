@@ -41,6 +41,7 @@ export default function Sidebar({
   unreadByRoom = {},
   roomActivityById = {},
   callHistory = [],
+  roomCallStatusById = {},
   onStartCallFromSidebar = () => {},
   onSelectRoom,
   onCreateRoomOpen,
@@ -104,6 +105,24 @@ export default function Sidebar({
     () => (callHistory || []).filter((entry) => entry.callType === callsFilter),
     [callHistory, callsFilter]
   );
+  const callRoomNameById = useMemo(() => {
+    void nicknameTick;
+    const map = {};
+    (rooms || []).forEach((room) => {
+      if (!room?._id) return;
+      const isDirectChat = Boolean(room.isPrivate) && (room.members?.length === 2);
+      const otherMember = isDirectChat
+        ? room.members?.find((member) => (member._id || member.id) !== user?.id)
+        : null;
+      const nickname = isDirectChat
+        ? getDirectNickname(user?.id, otherMember?.id || otherMember?._id)
+        : "";
+      map[room._id] = isDirectChat
+        ? (nickname || otherMember?.displayName || otherMember?.username || "Direct chat")
+        : (room.name || "Conversation");
+    });
+    return map;
+  }, [rooms, user?.id, nicknameTick]);
   const formatActivityTime = (value) => {
     if (!value) return "";
     const diffMs = Date.now() - new Date(value).getTime();
@@ -308,7 +327,7 @@ export default function Sidebar({
               {filteredCalls.length ? filteredCalls.map((entry) => (
                 <article key={entry.id} className="calls-inline-item">
                   <div className="calls-inline-copy">
-                    <strong>{entry.roomName || "Conversation"}</strong>
+                    <strong>{callRoomNameById[entry.roomId] || entry.roomName || "Conversation"}</strong>
                     <span>{entry.direction === "incoming" ? "Incoming" : "Outgoing"} • {formatRelativeTime(entry.createdAt)}</span>
                   </div>
                   <button
@@ -341,6 +360,8 @@ export default function Sidebar({
             const roomAvatarUrl = toAttachmentUrl(isDirectChat ? otherMember?.avatarUrl : room.avatarUrl);
             const activity = roomActivityById[room._id];
             const unread = unreadByRoom[room._id] || 0;
+            const roomCallState = roomCallStatusById[room._id];
+            const hasLiveCall = Boolean(roomCallState?.active);
             const activityText = activity?.text || (isDirectChat ? "Direct chat" : (room.description || "chat"));
             const activityTime = formatActivityTime(activity?.createdAt);
             const isOwnActivity = (activity?.senderId || "") === (user?.id || "");
@@ -372,6 +393,17 @@ export default function Sidebar({
                   </span>
                   {unread > 0 ? (
                     <span className="room-unread-dot" aria-label={`${unread} unread messages`} />
+                  ) : hasLiveCall && isMember ? (
+                    <button
+                      type="button"
+                      className="room-join-live-btn"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onStartCallFromSidebar(room._id, roomCallState?.callType || "audio");
+                      }}
+                    >
+                      Join
+                    </button>
                   ) : !isDirectChat ? (
                     <small className="room-members">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

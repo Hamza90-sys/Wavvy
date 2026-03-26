@@ -25,7 +25,18 @@ export default function CallWindow({
   const [activePanel, setActivePanel] = useState(null);
   const [chatDraft, setChatDraft] = useState("");
   const [showSpeakerGlow, setShowSpeakerGlow] = useState(true);
+  const [endingCall, setEndingCall] = useState(false);
+  const callRoomLabel = useMemo(() => {
+    const members = activeRoom?.members || [];
+    const isDirectChat = Boolean(activeRoom?.isPrivate) && members.length === 2;
+    if (isDirectChat) {
+      const otherMember = members.find((member) => (member._id || member.id) !== currentUser?.id);
+      return otherMember?.displayName || otherMember?.username || "Direct chat";
+    }
+    return activeRoom?.name || "Room unavailable";
+  }, [activeRoom, currentUser?.id]);
   const waitingForParticipant = callState?.awaitingPeer || (!callState?.inCall && !callState?.incoming);
+  const showIncomingOnly = Boolean(callState?.incoming && !callState?.inCall && !callState?.connecting);
   const recentMessages = useMemo(() => (messages || []).slice(-40), [messages]);
   const status = useMemo(() => {
     if (waitingForParticipant) return { tone: "waiting", text: "Waiting for participant" };
@@ -111,6 +122,30 @@ export default function CallWindow({
     setChatDraft("");
   };
 
+  const handleEndCall = async () => {
+    if (endingCall) return;
+    setEndingCall(true);
+    try {
+      await Promise.resolve(onEndCall?.());
+    } finally {
+      window.setTimeout(() => {
+        window.close();
+      }, 900);
+    }
+  };
+
+  if (endingCall) {
+    return (
+      <main className="call-only-shell call-ending-shell">
+        <div className="call-only-bg" aria-hidden="true" />
+        <section className="call-ending-card">
+          <h2>Call ending...</h2>
+          <p>Wrapping things up. You can close this tab safely.</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="call-only-shell">
       <div className="call-only-bg" aria-hidden="true" />
@@ -119,7 +154,7 @@ export default function CallWindow({
           <div className="call-window-meta">
             <span className={`call-window-chip ${status.tone}`}>{status.text}</span>
             <strong>{callState?.callType === "video" ? "Video call" : "Voice call"}</strong>
-            <span>{activeRoom?.name || "Room unavailable"}</span>
+            <span>{callRoomLabel}</span>
           </div>
           <div className="call-window-presence">
             <button type="button" className="call-window-close" onClick={onCloseWindow}>
@@ -134,7 +169,7 @@ export default function CallWindow({
         </header>
 
         {callState?.incoming ? (
-          <div className="call-window-incoming">
+          <div className={`call-window-incoming${showIncomingOnly ? " compact" : ""}`}>
             <span>
               {callState.incoming.fromName} is calling ({callState.incoming.callType === "video" ? "video" : "audio"})
             </span>
@@ -145,7 +180,8 @@ export default function CallWindow({
           </div>
         ) : null}
 
-        <div className="call-window-stage">
+        {!showIncomingOnly ? (
+          <div className="call-window-stage">
           {callState?.callType === "video" ? (
             <>
               <div className={`call-window-remote ${showSpeakerGlow && isRemoteSpeaking ? "speaking" : ""}`}>
@@ -179,7 +215,8 @@ export default function CallWindow({
               <audio ref={remoteVideoRef} autoPlay style={{ display: "none" }} />
             </div>
           )}
-        </div>
+          </div>
+        ) : null}
 
         {activePanel ? (
           <aside className="call-side-panel">
@@ -247,7 +284,8 @@ export default function CallWindow({
           </aside>
         ) : null}
 
-        <footer className="call-window-controls">
+        {!showIncomingOnly ? (
+          <footer className="call-window-controls">
           <button type="button" className={callControls?.micMuted ? "cw-ctl muted" : "cw-ctl"} onClick={onToggleMic} title={callControls?.micMuted ? "Unmute microphone" : "Mute microphone"}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M12 3a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -292,12 +330,13 @@ export default function CallWindow({
               <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.05.05a2 2 0 1 1-2.82 2.82l-.05-.05a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V22a2 2 0 1 1-4 0v-.08a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.05.05a2 2 0 1 1-2.82-2.82l.05-.05a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H2a2 2 0 1 1 0-4h.08a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.05-.05a2 2 0 1 1 2.82-2.82l.05.05a1.7 1.7 0 0 0 1.87.34h0A1.7 1.7 0 0 0 9 2.08V2a2 2 0 1 1 4 0v.08a1.7 1.7 0 0 0 1 1.55h0a1.7 1.7 0 0 0 1.87-.34l.05-.05a2 2 0 1 1 2.82 2.82l-.05.05a1.7 1.7 0 0 0-.34 1.87v0a1.7 1.7 0 0 0 1.55 1H22a2 2 0 1 1 0 4h-.08a1.7 1.7 0 0 0-1.55 1z" stroke="currentColor" strokeWidth="1.3" />
             </svg>
           </button>
-          <button type="button" className="cw-ctl end" onClick={onEndCall} title="End call">
+          <button type="button" className="cw-ctl end" onClick={handleEndCall} title="End call">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M21 15v-2a3 3 0 0 0-3-3h-2a15 15 0 0 0-8 0H6a3 3 0 0 0-3 3v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
-        </footer>
+          </footer>
+        ) : null}
       </section>
     </main>
   );

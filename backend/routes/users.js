@@ -523,7 +523,10 @@ router.get("/profile/:userId", async (req, res) => {
       return res.status(403).json({ message: "You are blocked by this user" });
     }
 
-    const roomsCount = await ChatRoom.countDocuments({ members: target._id });
+    const roomsCount = await ChatRoom.countDocuments({
+      members: target._id,
+      roomType: "normal"
+    });
     const viewer = await User.findById(req.user.id).select("following");
     const isFollowing = (viewer?.following || []).some((id) => id.toString() === target._id.toString());
     const pendingFollowRequest = await FollowRequest.findOne({

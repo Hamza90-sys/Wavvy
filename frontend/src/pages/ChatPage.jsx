@@ -113,6 +113,7 @@ export default function ChatPage() {
       return [];
     }
   });
+  const [roomCallStatusById, setRoomCallStatusById] = useState({});
 
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -127,8 +128,10 @@ export default function ChatPage() {
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get("callRoom");
     const callType = params.get("callType");
+    const autoAccept = params.get("autoAccept") === "1";
+    const fromUserId = params.get("fromUserId");
     return roomId && (callType === "audio" || callType === "video")
-      ? { roomId, callType, launched: false }
+      ? { roomId, callType, autoAccept, fromUserId, launched: false }
       : null;
   })();
   const launchParamsRef = useRef(initialLaunchParams);
@@ -328,7 +331,7 @@ export default function ChatPage() {
   const cleanupCall = useCallback(
     (notifyPeer = false) => {
       const { roomId, targetUserId } = currentCallRef.current;
-      if (notifyPeer && socket && roomId && targetUserId) {
+      if (notifyPeer && socket && roomId && targetUserId && targetUserId !== "__pending__") {
         socket.emit("call:end", { roomId, targetUserId });
       }
       closePeerConnection();
@@ -545,8 +548,14 @@ export default function ChatPage() {
       if (!socket) return;
       if (callState.inCall || callState.connecting) return;
 
-      const target = roomUsers.find((roomUser) => roomUser.id !== user?.id);
       const roomMeta = rooms.find((room) => room._id === roomId);
+      const targets = Array.from(
+        new Set(
+          ((roomMeta?.members || roomUsers) || [])
+            .map((member) => member.id || member._id)
+            .filter((memberId) => memberId && memberId !== user?.id)
+        )
+      );
 
       try {
         appendCallHistory({
@@ -555,26 +564,24 @@ export default function ChatPage() {
           callType,
           direction: "outgoing"
         });
-        setCallState({ connecting: true, inCall: false, callType, incoming: null, awaitingPeer: !target });
+        setCallState({ connecting: true, inCall: false, callType, incoming: null, awaitingPeer: targets.length > 0 });
         setCallControls({ micMuted: false, cameraOff: callType !== "video", sharingScreen: false });
-        currentCallRef.current = { roomId, targetUserId: target?.id || null, callType };
+        currentCallRef.current = { roomId, targetUserId: "__pending__", callType };
 
         await startLocalMedia(callType);
-        if (target) {
-          const peerConnection = ensurePeerConnection(roomId, target.id);
-          attachLocalTracksToPeerConnection(peerConnection);
+        targets.forEach((targetUserId) => {
           socket.emit("call:invite", {
             roomId,
-            targetUserId: target.id,
+            targetUserId,
             callType
           });
-        }
+        });
       } catch (error) {
         cleanupCall(false);
         window.alert("Unable to start call. Please allow microphone/camera access.");
       }
     },
-    [socket, callState.inCall, callState.connecting, roomUsers, user, rooms, activeRoom?.name, appendCallHistory, startLocalMedia, ensurePeerConnection, attachLocalTracksToPeerConnection, cleanupCall]
+    [socket, callState.inCall, callState.connecting, roomUsers, user, rooms, activeRoom?.name, appendCallHistory, startLocalMedia, cleanupCall]
   );
 
   const loadRooms = useCallback(async () => {
@@ -676,12 +683,54 @@ export default function ChatPage() {
     setActiveRoom(room);
   }, [rooms]);
 
+  const performIncomingAccept = useCallback(
+    async (incoming) => {
+      if (!incoming || !socket) return;
+      try {
+        const roomMeta = rooms.find((room) => room._id === incoming.roomId);
+        appendCallHistory({
+          roomId: incoming.roomId,
+          roomName: roomMeta?.name || activeRoom?.name || incoming.fromName || "Conversation",
+          callType: incoming.callType,
+          direction: "incoming"
+        });
+        currentCallRef.current = {
+          roomId: incoming.roomId,
+          targetUserId: incoming.fromUserId,
+          callType: incoming.callType
+        };
+        setCallState((prev) => ({ ...prev, connecting: true, callType: incoming.callType, incoming: null, awaitingPeer: false }));
+        setCallControls({ micMuted: false, cameraOff: incoming.callType !== "video", sharingScreen: false });
+        await startLocalMedia(incoming.callType);
+        socket.emit("call:accept", {
+          roomId: incoming.roomId,
+          targetUserId: incoming.fromUserId,
+          callType: incoming.callType
+        });
+      } catch (_error) {
+        cleanupCall(false);
+        window.alert("Unable to accept call. Please allow microphone/camera access.");
+      }
+    },
+    [activeRoom?.name, appendCallHistory, cleanupCall, rooms, socket, startLocalMedia]
+  );
+
   useEffect(() => {
     const launch = launchParamsRef.current;
     if (!launch || launch.launched || !activeRoom || activeRoom._id !== launch.roomId) return;
     launchParamsRef.current = { ...launch, launched: true };
+
+    if (launch.autoAccept && launch.fromUserId) {
+      performIncomingAccept({
+        roomId: launch.roomId,
+        callType: launch.callType,
+        fromUserId: launch.fromUserId,
+        fromName: "Caller"
+      }).catch(() => undefined);
+      return;
+    }
     startCall(activeRoom._id, launch.callType);
-  }, [activeRoom, startCall]);
+  }, [activeRoom, performIncomingAccept, startCall]);
 
   useEffect(() => {
     if (!isCallOnlyMode || !activeRoom?._id) return;
@@ -881,16 +930,23 @@ export default function ChatPage() {
 
     const onCallAccepted = async ({ roomId, fromUserId }) => {
       const current = currentCallRef.current;
-      if (!peerConnectionRef.current || current.targetUserId !== fromUserId || current.roomId !== roomId) return;
+      if (current.roomId !== roomId) return;
+      if (current.targetUserId && current.targetUserId !== "__pending__" && current.targetUserId !== fromUserId) return;
 
-      const offer = await peerConnectionRef.current.createOffer();
-      await peerConnectionRef.current.setLocalDescription(offer);
+      currentCallRef.current = { roomId, targetUserId: fromUserId, callType: current.callType };
+      const peerConnection = ensurePeerConnection(roomId, fromUserId);
+      attachLocalTracksToPeerConnection(peerConnection);
+      if (!peerConnection) return;
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
       socket.emit("call:offer", {
         roomId,
         targetUserId: fromUserId,
         offer,
         callType: current.callType
       });
+      setCallState((prev) => ({ ...prev, awaitingPeer: false }));
     };
 
     const onCallRejected = ({ roomId, fromUserId }) => {
@@ -955,6 +1011,13 @@ export default function ChatPage() {
       const current = currentCallRef.current;
       if (current.targetUserId !== fromUserId || current.roomId !== roomId) return;
       cleanupCall(false);
+    };
+    const onRoomCallStatus = ({ roomId, active, callType, participantCount }) => {
+      if (!roomId) return;
+      setRoomCallStatusById((prev) => ({
+        ...prev,
+        [roomId]: { active: Boolean(active), callType: callType || "audio", participantCount: participantCount || 0 }
+      }));
     };
 
     const onUserUpdated = (payload) => {
@@ -1021,6 +1084,7 @@ export default function ChatPage() {
     socket.on("call:answer", onCallAnswer);
     socket.on("call:ice-candidate", onCallIceCandidate);
     socket.on("call:ended", onCallEnded);
+    socket.on("room:call-status", onRoomCallStatus);
     socket.on("user:updated", onUserUpdated);
     socket.on("notification:new", onNotificationNew);
     return () => {
@@ -1040,6 +1104,7 @@ export default function ChatPage() {
       socket.off("call:answer", onCallAnswer);
       socket.off("call:ice-candidate", onCallIceCandidate);
       socket.off("call:ended", onCallEnded);
+      socket.off("room:call-status", onRoomCallStatus);
       socket.off("user:updated", onUserUpdated);
       socket.off("notification:new", onNotificationNew);
     };
@@ -1098,7 +1163,7 @@ export default function ChatPage() {
     }
   };
 
-  const sendMessage = async ({ content, files, voiceMeta = [] }) => {
+  const sendMessage = async ({ content, files, voiceMeta = [], replyTo = null }) => {
     if (!activeRoom) return;
 
     let attachments = [];
@@ -1116,7 +1181,7 @@ export default function ChatPage() {
     }
 
     socket?.emit("typing:stop", { roomId: activeRoom._id });
-    socket?.emit("sendMessage", { roomId: activeRoom._id, content, attachments });
+    socket?.emit("sendMessage", { roomId: activeRoom._id, content, attachments, replyTo });
   };
 
   const startTyping = () => {
@@ -1232,31 +1297,24 @@ export default function ChatPage() {
     const incoming = callState.incoming;
     if (!incoming || !socket) return;
 
-    try {
-      const roomMeta = rooms.find((room) => room._id === incoming.roomId);
-      appendCallHistory({
-        roomId: incoming.roomId,
-        roomName: roomMeta?.name || activeRoom?.name || incoming.fromName || "Conversation",
-        callType: incoming.callType,
-        direction: "incoming"
-      });
-      currentCallRef.current = {
-        roomId: incoming.roomId,
-        targetUserId: incoming.fromUserId,
-        callType: incoming.callType
-      };
-      setCallState((prev) => ({ ...prev, connecting: true, callType: incoming.callType, incoming: null, awaitingPeer: false }));
-      setCallControls({ micMuted: false, cameraOff: incoming.callType !== "video", sharingScreen: false });
-      await startLocalMedia(incoming.callType);
-      socket.emit("call:accept", {
-        roomId: incoming.roomId,
-        targetUserId: incoming.fromUserId,
-        callType: incoming.callType
-      });
-    } catch (error) {
-      cleanupCall(false);
-      window.alert("Unable to accept call. Please allow microphone/camera access.");
+    if (!isCallOnlyMode) {
+      const url = new URL("/chat", window.location.origin);
+      url.searchParams.set("callRoom", incoming.roomId);
+      url.searchParams.set("callType", incoming.callType);
+      url.searchParams.set("callOnly", "1");
+      url.searchParams.set("autoAccept", "1");
+      url.searchParams.set("fromUserId", incoming.fromUserId);
+      const newTab = window.open(url.toString(), "_blank");
+      if (!newTab) {
+        window.alert("Popup blocked. Please allow popups to answer calls in a new tab.");
+        return;
+      }
+      newTab.opener = null;
+      setCallState((prev) => ({ ...prev, incoming: null }));
+      return;
     }
+
+    await performIncomingAccept(incoming);
   };
 
   const rejectIncomingCall = () => {
@@ -1439,6 +1497,7 @@ export default function ChatPage() {
         unreadByRoom={unreadByRoom}
         roomActivityById={roomActivityById}
         callHistory={callHistory}
+        roomCallStatusById={roomCallStatusById}
         onStartCallFromSidebar={startCallFromSidebar}
         onSelectRoom={selectRoom}
         onCreateRoomOpen={() => setCreateOpen(true)}

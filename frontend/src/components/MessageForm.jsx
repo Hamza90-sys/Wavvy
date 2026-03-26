@@ -1,6 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEdit, draftInjection, onTypingStart = () => {}, onTypingStop = () => {} }) {
+export default function MessageForm({
+  onSend,
+  onEdit,
+  editingMessage,
+  onCancelEdit,
+  replyTo,
+  onCancelReply,
+  onTypingStart = () => {},
+  onTypingStop = () => {}
+}) {
   const [text, setText] = useState("");
   const [draftText, setDraftText] = useState("");
   const latestTextRef = useRef("");
@@ -29,6 +38,17 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
   const recordingSecondsRef = useRef(0);
   const recordingStartedAtRef = useRef(0);
   const onTypingStopRef = useRef(onTypingStop);
+  const unifiedToNative = (unifiedValue = "") => {
+    if (!unifiedValue || typeof unifiedValue !== "string") return "";
+    try {
+      return unifiedValue
+        .split("-")
+        .map((chunk) => String.fromCodePoint(parseInt(chunk, 16)))
+        .join("");
+    } catch (_error) {
+      return "";
+    }
+  };
 
   const formatTimer = (seconds) => {
     const safeSeconds = Math.max(0, Math.floor(seconds || 0));
@@ -290,6 +310,11 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
   }, [emojiOpen]);
 
   useEffect(() => {
+    document.body.classList.toggle("emoji-picker-open", emojiOpen);
+    return () => document.body.classList.remove("emoji-picker-open");
+  }, [emojiOpen]);
+
+  useEffect(() => {
     if (!emojiOpen || (emojiPickerLib && emojiData)) return;
     let mounted = true;
     Promise.all([
@@ -306,14 +331,9 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
   }, [emojiOpen, emojiPickerLib, emojiData]);
 
   useEffect(() => {
-    if (!draftInjection?.text) return;
-    setText(draftInjection.text);
-    scheduleTyping();
-    if (inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.setSelectionRange(draftInjection.text.length, draftInjection.text.length);
-    }
-  }, [draftInjection, scheduleTyping]);
+    if (!replyTo?.messageId || !inputRef.current) return;
+    inputRef.current.focus();
+  }, [replyTo]);
 
   useEffect(() => {
     if (editingMessage) {
@@ -386,13 +406,26 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
       }]
       : [];
 
-    Promise.resolve(onSend({ content: text, files: combinedFiles, voiceMeta }))
+    Promise.resolve(onSend({
+      content: text,
+      files: combinedFiles,
+      voiceMeta,
+      replyTo: replyTo?.messageId
+        ? {
+            messageId: replyTo.messageId,
+            userId: replyTo.userId || "",
+            username: replyTo.username || "Unknown",
+            snippet: replyTo.snippet || ""
+          }
+        : null
+    }))
       .then(() => {
         setText("");
         setFiles([]);
         setRecordedVoice(null);
         setRecordingSeconds(0);
         recordingSecondsRef.current = 0;
+        onCancelReply?.();
         if (fileInputRef.current) fileInputRef.current.value = "";
       })
       .finally(() => setSending(false));
@@ -406,7 +439,12 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
   };
 
   const onEmojiSelect = (emoji) => {
-    const nativeEmoji = emoji?.native || emoji?.skins?.[0]?.native || emoji?.colons || "";
+    const nativeEmoji = emoji?.native
+      || emoji?.skins?.[0]?.native
+      || unifiedToNative(emoji?.unified)
+      || (typeof emoji === "string" ? emoji : "")
+      || emoji?.colons
+      || "";
     if (!nativeEmoji) return;
     const input = inputRef.current;
     if (!input) {
@@ -480,6 +518,20 @@ export default function MessageForm({ onSend, onEdit, editingMessage, onCancelEd
                 <span>Editing Message</span>
               </div>
               <button type="button" className="close-btn ghost-btn compact" onClick={onCancelEdit} aria-label="Cancel editing">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          ) : null}
+          {!editingMessage && replyTo?.messageId ? (
+            <div className="replying-banner">
+              <div className="replying-banner-content">
+                <strong>Replying to {replyTo.username || "Unknown"}</strong>
+                {replyTo.snippet ? <span>{replyTo.snippet}</span> : null}
+              </div>
+              <button type="button" className="close-btn ghost-btn compact" onClick={onCancelReply} aria-label="Cancel reply">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
