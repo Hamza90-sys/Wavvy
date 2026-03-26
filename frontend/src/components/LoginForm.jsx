@@ -13,11 +13,16 @@ export default function LoginForm({ setError }) {
     event.preventDefault();
     setLoading(true);
     setError("");
+    const result = await login(form.email, form.password);
+    if (!result?.ok) {
+      setError(result?.error || "Login failed");
+      setLoading(false);
+      return;
+    }
     try {
-      await login(form.email, form.password);
       navigate("/chat");
     } catch (error) {
-      setError(error.message);
+      setError(error?.message || "Login failed");
     } finally {
       setLoading(false);
     }

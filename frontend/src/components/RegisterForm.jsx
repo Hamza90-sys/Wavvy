@@ -13,11 +13,16 @@ export default function RegisterForm({ setError }) {
     event.preventDefault();
     setLoading(true);
     setError("");
+    const result = await register(form.username, form.email, form.password);
+    if (!result?.ok) {
+      setError(result?.error || "Registration failed");
+      setLoading(false);
+      return;
+    }
     try {
-      await register(form.username, form.email, form.password);
       navigate("/chat");
     } catch (error) {
-      setError(error.message);
+      setError(error?.message || "Registration failed");
     } finally {
       setLoading(false);
     }

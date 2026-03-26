@@ -57,16 +57,14 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Login failed");
+      if (!res.ok) return { ok: false, error: data.message || "Login failed" };
       persist(data.token, data.user);
+      return { ok: true };
     } catch (err) {
-      // network errors manifest as TypeError "Failed to fetch"
       if (err instanceof TypeError) {
-        throw new Error(
-          "Unable to contact server. Is the backend running?"
-        );
+        return { ok: false, error: "Unable to contact server. Is the backend running?" };
       }
-      throw err;
+      return { ok: false, error: err?.message || "Login failed" };
     }
   }, [persist]);
 
@@ -78,15 +76,14 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ username, email, password })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Registration failed");
+      if (!res.ok) return { ok: false, error: data.message || "Registration failed" };
       persist(data.token, data.user);
+      return { ok: true };
     } catch (err) {
       if (err instanceof TypeError) {
-        throw new Error(
-          "Unable to contact server. Is the backend running?"
-        );
+        return { ok: false, error: "Unable to contact server. Is the backend running?" };
       }
-      throw err;
+      return { ok: false, error: err?.message || "Registration failed" };
     }
   }, [persist]);
 
